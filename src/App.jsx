@@ -129,53 +129,121 @@ function PinLock({ onUnlock }) {
 function AdminHome() {
   const today = new Date();
   const nextMonth = today.getMonth() + 2;
+  const [tab, setTab] = useState('survey');
   const [year, setYear] = useState(nextMonth > 12 ? today.getFullYear() + 1 : today.getFullYear());
   const [month, setMonth] = useState(nextMonth > 12 ? 1 : nextMonth);
   const [creating, setCreating] = useState(false);
   const [surveys, setSurveys] = useState([]);
   const [loaded, setLoaded] = useState(false);
 
-  const load = useCallback(async () => {
+  // スタッフ管理
+  const [groups, setGroups] = useState(INITIAL_GROUPS);
+  const [groupsLoaded, setGroupsLoaded] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newGrade, setNewGrade] = useState('first');
+
+  const loadSurveys = useCallback(async () => {
     try {
       const { surveys } = await api.listSurveys();
       setSurveys(surveys);
-    } catch (e) {
-      console.error(e);
-    } finally { setLoaded(true); }
+    } catch (e) { console.error(e); }
+    finally { setLoaded(true); }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  const loadGroups = useCallback(async () => {
+    try {
+      const { groups: g } = await api.getGroups();
+      if (g) setGroups(g);
+    } catch (e) { console.error(e); }
+    finally { setGroupsLoaded(true); }
+  }, []);
+
+  useEffect(() => { loadSurveys(); loadGroups(); }, [loadSurveys, loadGroups]);
+
+  const saveGroups = async (next) => {
+    setSaving(true);
+    try { await api.updateGroups(next); }
+    catch (e) { alert('保存失敗: ' + e.message); }
+    finally { setSaving(false); }
+  };
 
   const createSurvey = async () => {
     setCreating(true);
     try {
       const schedule = buildMonthSchedule(year, month);
-      const { id } = await api.createSurvey({
-        year, month, schedule, groups: INITIAL_GROUPS,
-      });
+      const { id } = await api.createSurvey({ year, month, schedule, groups });
       window.location.hash = `#/admin/${id}`;
     } catch (e) {
       alert('作成失敗: ' + e.message);
-    } finally {
-      setCreating(false);
-    }
+    } finally { setCreating(false); }
   };
 
   const removeSurvey = async (id) => {
     if (!confirm('この調査を削除しますか？（回答もすべて削除されます）')) return;
     await api.deleteSurvey(id);
-    load();
+    loadSurveys();
+  };
+
+  // スタッフ操作
+  const addStaff = async () => {
+    const name = newName.trim();
+    if (!name) return;
+    const all = [...groups.third, ...groups.second, ...groups.first];
+    if (all.includes(name)) { alert(`「${name}」はすでに登録されています`); return; }
+    const next = { ...groups, [newGrade]: [...groups[newGrade], name] };
+    setGroups(next);
+    setNewName('');
+    await saveGroups(next);
+  };
+
+  const removeStaff = async (name) => {
+    if (!confirm(`「${name}」を削除しますか？`)) return;
+    const next = {
+      third: groups.third.filter(n => n !== name),
+      second: groups.second.filter(n => n !== name),
+      first: groups.first.filter(n => n !== name),
+    };
+    setGroups(next);
+    await saveGroups(next);
+  };
+
+  const promoteStaff = async (name) => {
+    let next;
+    if (groups.third.includes(name)) {
+      if (!confirm(`「${name}」を卒業（削除）しますか？`)) return;
+      next = { ...groups, third: groups.third.filter(n => n !== name) };
+    } else if (groups.second.includes(name)) {
+      next = {
+        ...groups,
+        second: groups.second.filter(n => n !== name),
+        third: [...groups.third, name],
+      };
+    } else {
+      next = {
+        ...groups,
+        first: groups.first.filter(n => n !== name),
+        second: [...groups.second, name],
+      };
+    }
+    setGroups(next);
+    await saveGroups(next);
   };
 
   const logout = () => { tokenStore.clear(); window.location.reload(); };
 
+  const tabStyle = (key) => ({
+    padding: '7px 18px', borderRadius: 8, border: 'none', cursor: 'pointer',
+    fontSize: 13, fontWeight: 700,
+    background: tab === key ? '#6366f1' : '#1e293b',
+    color: tab === key ? '#fff' : '#94a3b8',
+  });
+
   return (
     <div style={PAGE}>
       <div style={{ maxWidth: 720, margin: '0 auto', padding: 24 }}>
-        <div style={{ display: 'flex', alignItems: 'center', marginBottom: 24 }}>
-          <h1 style={{ fontSize: 24, fontWeight: 800, margin: 0 }}>
-            🐴 練習参加者把握ツール
-          </h1>
+        <div style={{ display: 'flex', alignItems: 'center', marginBottom: 20 }}>
+          <h1 style={{ fontSize: 22, fontWeight: 800, margin: 0 }}>🐴 練習参加者把握ツール</h1>
           <button onClick={logout} style={{
             marginLeft: 'auto', padding: '4px 12px', fontSize: 12,
             background: '#1e293b', color: '#94a3b8', border: '1px solid #334155',
@@ -183,47 +251,120 @@ function AdminHome() {
           }}>ログアウト</button>
         </div>
 
-        <div style={CARD}>
-          <div style={{ fontWeight: 700, marginBottom: 14 }}>新規調査を作成</div>
-          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-            <input type="number" value={year} onChange={e => setYear(+e.target.value)}
-              style={{ ...INPUT, width: 90 }} />
-            <span>年</span>
-            <input type="number" min={1} max={12} value={month}
-              onChange={e => setMonth(+e.target.value)} style={{ ...INPUT, width: 60 }} />
-            <span>月</span>
-            <button onClick={createSurvey} disabled={creating} style={BTN_PRIMARY}>
-              {creating ? '作成中...' : '➕ 作成'}
-            </button>
-          </div>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+          <button style={tabStyle('survey')} onClick={() => setTab('survey')}>📅 調査</button>
+          <button style={tabStyle('staff')} onClick={() => setTab('staff')}>👥 スタッフ</button>
         </div>
 
-        <div style={CARD}>
-          <div style={{ fontWeight: 700, marginBottom: 14 }}>既存の調査</div>
-          {loaded && surveys.length === 0 && (
-            <div style={{ color: '#475569', textAlign: 'center', padding: 16 }}>まだありません</div>
-          )}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {surveys.map(s => (
-              <div key={s.id} style={{
-                padding: '10px 14px', background: '#0f1117', borderRadius: 8,
-                display: 'flex', alignItems: 'center', gap: 10,
-              }}>
-                <a href={`#/admin/${s.id}`} style={{
-                  flex: 1, textDecoration: 'none', color: '#e2e8f0',
-                  display: 'flex', gap: 10, alignItems: 'baseline',
-                }}>
-                  <span style={{ fontWeight: 700 }}>{s.year}年{s.month}月</span>
-                  <span style={{ color: '#64748b', fontSize: 11 }}>{s.id.slice(0, 8)}...</span>
-                </a>
-                <button onClick={() => removeSurvey(s.id)} style={{
-                  padding: '3px 10px', fontSize: 11, border: 'none', borderRadius: 6,
-                  background: '#3b1f1f', color: '#f87171', cursor: 'pointer',
-                }}>削除</button>
+        {/* ─── 調査タブ ─── */}
+        {tab === 'survey' && (
+          <>
+            <div style={CARD}>
+              <div style={{ fontWeight: 700, marginBottom: 14 }}>新規調査を作成</div>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                <input type="number" value={year} onChange={e => setYear(+e.target.value)}
+                  style={{ ...INPUT, width: 90 }} />
+                <span>年</span>
+                <input type="number" min={1} max={12} value={month}
+                  onChange={e => setMonth(+e.target.value)} style={{ ...INPUT, width: 60 }} />
+                <span>月</span>
+                <button onClick={createSurvey} disabled={creating} style={BTN_PRIMARY}>
+                  {creating ? '作成中...' : '➕ 作成'}
+                </button>
+              </div>
+              <div style={{ fontSize: 12, color: '#64748b', marginTop: 10 }}>
+                ※ 現在のスタッフ名簿（{groups.third.length + groups.second.length + groups.first.length}名）が使われます
+              </div>
+            </div>
+
+            <div style={CARD}>
+              <div style={{ fontWeight: 700, marginBottom: 14 }}>既存の調査</div>
+              {loaded && surveys.length === 0 && (
+                <div style={{ color: '#475569', textAlign: 'center', padding: 16 }}>まだありません</div>
+              )}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {surveys.map(s => (
+                  <div key={s.id} style={{
+                    padding: '10px 14px', background: '#0f1117', borderRadius: 8,
+                    display: 'flex', alignItems: 'center', gap: 10,
+                  }}>
+                    <a href={`#/admin/${s.id}`} style={{
+                      flex: 1, textDecoration: 'none', color: '#e2e8f0',
+                      display: 'flex', gap: 10, alignItems: 'baseline',
+                    }}>
+                      <span style={{ fontWeight: 700 }}>{s.year}年{s.month}月</span>
+                      <span style={{ color: '#64748b', fontSize: 11 }}>{s.id.slice(0, 8)}...</span>
+                    </a>
+                    <button onClick={() => removeSurvey(s.id)} style={{
+                      padding: '3px 10px', fontSize: 11, border: 'none', borderRadius: 6,
+                      background: '#3b1f1f', color: '#f87171', cursor: 'pointer',
+                    }}>削除</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* ─── スタッフタブ ─── */}
+        {tab === 'staff' && (
+          <>
+            <div style={CARD}>
+              <div style={{ fontWeight: 700, marginBottom: 14 }}>スタッフ追加</div>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                <input
+                  value={newName}
+                  onChange={e => setNewName(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && addStaff()}
+                  placeholder="氏名"
+                  style={{ ...INPUT, width: 140 }}
+                />
+                <select value={newGrade} onChange={e => setNewGrade(e.target.value)}
+                  style={{ ...INPUT, padding: '6px 10px' }}>
+                  <option value="third">3年</option>
+                  <option value="second">2年</option>
+                  <option value="first">1年</option>
+                </select>
+                <button onClick={addStaff} disabled={saving} style={BTN_PRIMARY}>
+                  追加
+                </button>
+              </div>
+            </div>
+
+            {[['third', '3年', '#c084fc'], ['second', '2年', '#60a5fa'], ['first', '1年', '#34d399']].map(([key, label, color]) => (
+              <div key={key} style={CARD}>
+                <div style={{ color, fontWeight: 700, marginBottom: 12, fontSize: 14 }}>
+                  {label}生 ({groups[key].length}名)
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {groups[key].length === 0 && (
+                    <div style={{ color: '#475569', fontSize: 13, textAlign: 'center', padding: '8px 0' }}>スタッフなし</div>
+                  )}
+                  {groups[key].map(name => (
+                    <div key={name} style={{
+                      display: 'flex', alignItems: 'center', gap: 10,
+                      padding: '8px 12px', background: '#0f1117', borderRadius: 8,
+                    }}>
+                      <span style={{ flex: 1, fontWeight: 600 }}>{name}</span>
+                      <button onClick={() => promoteStaff(name)} disabled={saving} style={{
+                        padding: '4px 12px', fontSize: 12, borderRadius: 6, border: 'none', cursor: 'pointer',
+                        background: key === 'third' ? '#451a03' : '#1e3a5f',
+                        color: key === 'third' ? '#fdba74' : '#93c5fd',
+                        fontWeight: 600,
+                      }}>
+                        {key === 'third' ? '卒業' : key === 'second' ? '→3年に繰上' : '→2年に繰上'}
+                      </button>
+                      <button onClick={() => removeStaff(name)} disabled={saving} style={{
+                        padding: '4px 12px', fontSize: 12, borderRadius: 6, border: 'none', cursor: 'pointer',
+                        background: '#3b1f1f', color: '#f87171', fontWeight: 600,
+                      }}>削除</button>
+                    </div>
+                  ))}
+                </div>
               </div>
             ))}
-          </div>
-        </div>
+          </>
+        )}
       </div>
     </div>
   );

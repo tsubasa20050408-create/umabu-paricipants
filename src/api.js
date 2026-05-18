@@ -48,4 +48,10 @@ export const api = {
 
   deleteSurvey: (id) =>
     call('/api/survey', { method: 'POST', auth: true, body: { action: 'delete', id } }),
+
+  getGroups: () =>
+    call('/api/survey?resource=groups', { auth: true }),
+
+  updateGroups: (groups) =>
+    call('/api/survey', { method: 'POST', auth: true, body: { action: 'updateGroups', groups } }),
 };

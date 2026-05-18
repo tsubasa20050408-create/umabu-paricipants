@@ -1,6 +1,7 @@
 import { getRedis, isAuthed, genId } from './_lib.js';
 
 const INDEX_KEY = 'practice:surveys';
+const GROUPS_KEY = 'practice:groups';
 const KEY = (id) => `practice:survey:${id}`;
 
 export default async function handler(req, res) {
@@ -9,7 +10,14 @@ export default async function handler(req, res) {
   if (!redis) return res.status(500).json({ error: 'redis_not_configured' });
 
   if (req.method === 'GET') {
-    const { id, full } = req.query;
+    const { id, full, resource } = req.query;
+
+    if (resource === 'groups') {
+      if (!isAuthed(req)) return res.status(401).json({ error: 'unauthorized' });
+      const groups = await redis.get(GROUPS_KEY);
+      return res.status(200).json({ groups });
+    }
+
     if (!id) {
       // list (admin only)
       if (!isAuthed(req)) return res.status(401).json({ error: 'unauthorized' });
@@ -30,6 +38,16 @@ export default async function handler(req, res) {
   if (req.method === 'POST') {
     const body = req.body || {};
     const action = body.action;
+
+    if (action === 'updateGroups') {
+      if (!isAuthed(req)) return res.status(401).json({ error: 'unauthorized' });
+      const { groups } = body;
+      if (!groups || !groups.third || !groups.second || !groups.first) {
+        return res.status(400).json({ error: 'invalid_payload' });
+      }
+      await redis.set(GROUPS_KEY, groups);
+      return res.status(200).json({ ok: true });
+    }
 
     if (action === 'create') {
       if (!isAuthed(req)) return res.status(401).json({ error: 'unauthorized' });
