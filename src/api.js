@@ -54,4 +54,7 @@ export const api = {
 
   updateGroups: (groups) =>
     call('/api/survey', { method: 'POST', auth: true, body: { action: 'updateGroups', groups } }),
+
+  updateHorses: (id, horses) =>
+    call('/api/survey', { method: 'POST', auth: true, body: { action: 'updateHorses', id, horses } }),
 };

@@ -2,8 +2,8 @@ import * as XLSX from 'xlsx';
 import { DOW_LABELS, excelSerial, orderedMembers } from './schedule.js';
 
 // May練習参加者.xlsx の形式で出力
-// 列: A=日付シリアル / B=曜日 / C=時限 / D=参加者(カンマ区切り) / E=朝運動の馬欄(空)
-export function exportPracticeXlsx({ year, month, schedule, responses, groups }) {
+// 列: A=日付シリアル / B=曜日 / C=時限 / D=参加者(カンマ区切り) / E=朝運動の馬名
+export function exportPracticeXlsx({ year, month, schedule, responses, groups, horses = {} }) {
   const members = orderedMembers(groups);
   const wb = XLSX.utils.book_new();
   const aoa = [];
@@ -11,8 +11,9 @@ export function exportPracticeXlsx({ year, month, schedule, responses, groups })
   for (const day of schedule) {
     let firstRow = true;
     for (const slot of day.slots) {
+      const key = `${day.date}__${slot}`;
       const attendees = members
-        .filter(m => responses[m.name]?.slots?.[`${day.date}__${slot}`])
+        .filter(m => responses[m.name]?.slots?.[key])
         .map(m => m.name);
 
       aoa.push([
@@ -20,16 +21,14 @@ export function exportPracticeXlsx({ year, month, schedule, responses, groups })
         firstRow ? DOW_LABELS[day.dow] : '',
         slot,
         attendees.join('、'),
-        '', // 朝運動の馬欄（手動入力用）
+        horses[key] || '',
       ]);
       firstRow = false;
     }
   }
 
-  // ヘッダー行は元ファイルが「D1=参加者」のみだったので同じく
   const sheet = XLSX.utils.aoa_to_sheet([[null, null, null, '参加者', null], ...aoa]);
 
-  // A列を日付として書式設定（Excelシリアル）
   for (let r = 1; r <= aoa.length; r++) {
     const cell = sheet[XLSX.utils.encode_cell({ r, c: 0 })];
     if (cell && typeof cell.v === 'number') {
@@ -44,7 +43,6 @@ export function exportPracticeXlsx({ year, month, schedule, responses, groups })
 
   XLSX.utils.book_append_sheet(wb, sheet, 'Sheet1');
 
-  // 提出状況シートも追加
   const submitRows = [['名前', '学年', '提出', '提出日時']];
   for (const m of members) {
     const r = responses[m.name];

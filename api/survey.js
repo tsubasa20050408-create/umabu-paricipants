@@ -74,8 +74,30 @@ export default async function handler(req, res) {
       }
       const survey = await redis.get(KEY(id));
       if (!survey) return res.status(404).json({ error: 'not_found' });
+      // #1: グループに存在する名前のみ受け付ける
+      const allNames = [
+        ...(survey.groups?.third || []),
+        ...(survey.groups?.second || []),
+        ...(survey.groups?.first || []),
+      ];
+      if (!allNames.includes(name)) {
+        return res.status(400).json({ error: 'invalid_name' });
+      }
       survey.responses = survey.responses || {};
       survey.responses[name] = { name, grade, slots, submittedAt: new Date().toISOString() };
+      await redis.set(KEY(id), survey);
+      return res.status(200).json({ ok: true });
+    }
+
+    if (action === 'updateHorses') {
+      if (!isAuthed(req)) return res.status(401).json({ error: 'unauthorized' });
+      const { id, horses } = body;
+      if (!id || typeof horses !== 'object') {
+        return res.status(400).json({ error: 'invalid_payload' });
+      }
+      const survey = await redis.get(KEY(id));
+      if (!survey) return res.status(404).json({ error: 'not_found' });
+      survey.horses = horses;
       await redis.set(KEY(id), survey);
       return res.status(200).json({ ok: true });
     }
