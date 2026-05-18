@@ -1,0 +1,63 @@
+import * as XLSX from 'xlsx';
+import { DOW_LABELS, excelSerial, orderedMembers } from './schedule.js';
+
+// May練習参加者.xlsx の形式で出力
+// 列: A=日付シリアル / B=曜日 / C=時限 / D=参加者(カンマ区切り) / E=朝運動の馬欄(空)
+export function exportPracticeXlsx({ year, month, schedule, responses, groups }) {
+  const members = orderedMembers(groups);
+  const wb = XLSX.utils.book_new();
+  const aoa = [];
+
+  for (const day of schedule) {
+    let firstRow = true;
+    for (const slot of day.slots) {
+      const attendees = members
+        .filter(m => responses[m.name]?.slots?.[`${day.date}__${slot}`])
+        .map(m => m.name);
+
+      aoa.push([
+        firstRow ? excelSerial(day.date) : '',
+        firstRow ? DOW_LABELS[day.dow] : '',
+        slot,
+        attendees.join('、'),
+        '', // 朝運動の馬欄（手動入力用）
+      ]);
+      firstRow = false;
+    }
+  }
+
+  // ヘッダー行は元ファイルが「D1=参加者」のみだったので同じく
+  const sheet = XLSX.utils.aoa_to_sheet([[null, null, null, '参加者', null], ...aoa]);
+
+  // A列を日付として書式設定（Excelシリアル）
+  for (let r = 1; r <= aoa.length; r++) {
+    const cell = sheet[XLSX.utils.encode_cell({ r, c: 0 })];
+    if (cell && typeof cell.v === 'number') {
+      cell.t = 'n';
+      cell.z = 'yyyy/m/d';
+    }
+  }
+
+  sheet['!cols'] = [
+    { wch: 12 }, { wch: 5 }, { wch: 8 }, { wch: 80 }, { wch: 25 },
+  ];
+
+  XLSX.utils.book_append_sheet(wb, sheet, 'Sheet1');
+
+  // 提出状況シートも追加
+  const submitRows = [['名前', '学年', '提出', '提出日時']];
+  for (const m of members) {
+    const r = responses[m.name];
+    submitRows.push([
+      m.name,
+      m.grade === 'third' ? '3年' : m.grade === 'second' ? '2年' : '1年',
+      r ? '○' : '',
+      r?.submittedAt || '',
+    ]);
+  }
+  const s2 = XLSX.utils.aoa_to_sheet(submitRows);
+  s2['!cols'] = [{ wch: 10 }, { wch: 6 }, { wch: 6 }, { wch: 22 }];
+  XLSX.utils.book_append_sheet(wb, s2, '提出状況');
+
+  XLSX.writeFile(wb, `${year}年${month}月_練習参加者.xlsx`);
+}
