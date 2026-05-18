@@ -277,6 +277,21 @@ function AdminHome() {
     await saveGroups(next, prev);
   };
 
+  const promoteAll = async () => {
+    const graduating = groups.third;
+    if (!confirm(
+      `学年を一斉繰り上げします。\n` +
+      `・3年生 ${graduating.length}名（${graduating.join('、') || 'なし'}）→ 卒業（削除）\n` +
+      `・2年生 ${groups.second.length}名 → 3年生\n` +
+      `・1年生 ${groups.first.length}名 → 2年生\n\n` +
+      `よろしいですか？`
+    )) return;
+    const prev = groups;
+    const next = { third: groups.second, second: groups.first, first: [] };
+    setGroups(next);
+    await saveGroups(next, prev);
+  };
+
   const logout = () => { tokenStore.clear(); window.location.reload(); };
 
   const tabStyle = (key) => ({
@@ -362,7 +377,14 @@ function AdminHome() {
         {tab === 'staff' && (
           <>
             <div style={CARD}>
-              <div style={{ fontWeight: 700, marginBottom: 14 }}>スタッフ追加</div>
+              <div style={{ display: 'flex', alignItems: 'center', marginBottom: 14 }}>
+                <div style={{ fontWeight: 700 }}>スタッフ追加</div>
+                <button onClick={promoteAll} disabled={saving} style={{
+                  marginLeft: 'auto', padding: '6px 16px', fontSize: 13, fontWeight: 700,
+                  background: 'linear-gradient(135deg,#92400e,#78350f)',
+                  color: '#fcd34d', border: 'none', borderRadius: 8, cursor: 'pointer',
+                }}>🎓 学年を一斉繰り上げ</button>
+              </div>
               <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
                 <input value={newName} onChange={e => setNewName(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && addStaff()}
