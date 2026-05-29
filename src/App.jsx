@@ -90,6 +90,7 @@ function assignAsaUndoHorses(schedule, asaUndo, groups) {
 
   const result = {};
   const reasons = {};
+  const suggestions = {};
   const lastUsed = {};
   const personRidden = {};
 
@@ -135,6 +136,15 @@ function assignAsaUndoHorses(schedule, asaUndo, groups) {
         });
       parts.push(`${chosen}は${conflicting.join('・')}が今月騎乗済み`);
       reasons[date] = parts.join(' / ');
+
+      // 修正案: 前日使用の馬を変更すれば今日使えるケースを提示
+      const fmtDate = (d) => { const [, m, day] = d.split('-'); return `${+m}/${+day}`; };
+      const suggestionList = forbidden
+        .filter(h => conflictScore(h) < conflictScore(chosen))
+        .map(h => `前日(${fmtDate(lastUsed[h])})の${h}を別の馬に変更 → 今日${h}が使用可能`);
+      if (suggestionList.length > 0) {
+        suggestions[date] = suggestionList.join(' / ');
+      }
     }
 
     result[date] = chosen;
@@ -145,7 +155,7 @@ function assignAsaUndoHorses(schedule, asaUndo, groups) {
     }
   }
 
-  return { assignments: result, reasons };
+  return { assignments: result, reasons, suggestions };
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -614,6 +624,7 @@ function AdminDetail({ surveyId }) {
   const [asaUndo, setAsaUndo] = useState({});
   const [asaUndoHorse, setAsaUndoHorse] = useState({});
   const [assignReasons, setAssignReasons] = useState({});
+  const [assignSuggestions, setAssignSuggestions] = useState({});
   const [gozenAssign, setGozenAssign] = useState({});
   const [horseNameSuggestions, setHorseNameSuggestions] = useState([]);
 
@@ -694,9 +705,10 @@ function AdminDetail({ surveyId }) {
   const remainDays = daysUntil(survey.deadline);
 
   const autoAssignAsaUndoHorses = async () => {
-    const { assignments: newAssign, reasons } = assignAsaUndoHorses(survey.schedule, asaUndo, survey.groups);
+    const { assignments: newAssign, reasons, suggestions } = assignAsaUndoHorses(survey.schedule, asaUndo, survey.groups);
     setAsaUndoHorse(newAssign);
     setAssignReasons(reasons);
+    setAssignSuggestions(suggestions);
     for (const [date, horse] of Object.entries(newAssign)) {
       try { await api.updateAsaUndoHorse(surveyId, date, horse); }
       catch (e) { console.error('馬割り当て保存失敗:', e.message); }
@@ -706,6 +718,7 @@ function AdminDetail({ surveyId }) {
   const saveAsaUndoHorse = async (date, horse) => {
     setAsaUndoHorse(prev => ({ ...prev, [date]: horse }));
     setAssignReasons(prev => { const next = { ...prev }; delete next[date]; return next; });
+    setAssignSuggestions(prev => { const next = { ...prev }; delete next[date]; return next; });
     try { await api.updateAsaUndoHorse(surveyId, date, horse); }
     catch (e) { console.error('馬割り当て保存失敗:', e.message); }
   };
@@ -878,6 +891,7 @@ function AdminDetail({ surveyId }) {
             const attending = asaUndo[day.date] || [];
             const selectedHorse = asaUndoHorse[day.date] || '';
             const reason = assignReasons[day.date];
+            const suggestion = assignSuggestions[day.date];
             return (
               <div key={day.date} style={{ marginBottom: 10, paddingBottom: 10, borderBottom: '1px solid #0f1117' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
@@ -899,8 +913,13 @@ function AdminDetail({ surveyId }) {
                   </select>
                 </div>
                 {reason && (
-                  <div style={{ fontSize: 11, color: '#fbbf24', marginBottom: 4, paddingLeft: 2 }}>
+                  <div style={{ fontSize: 11, color: '#fbbf24', marginBottom: 2, paddingLeft: 2 }}>
                     ⚠ 重複回避不可: {reason}
+                  </div>
+                )}
+                {suggestion && (
+                  <div style={{ fontSize: 11, color: '#67e8f9', marginBottom: 4, paddingLeft: 2 }}>
+                    💡 修正案: {suggestion}
                   </div>
                 )}
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
