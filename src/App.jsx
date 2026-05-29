@@ -89,6 +89,7 @@ function assignAsaUndoHorses(schedule, asaUndo, groups) {
     .sort();
 
   const result = {};
+  const reasons = {};
   const lastUsed = {};
   const personRidden = {};
 
@@ -121,6 +122,21 @@ function assignAsaUndoHorses(schedule, asaUndo, groups) {
     });
 
     const chosen = rank(normal)[0] ?? rank(lowPriority)[0] ?? rank(forbidden)[0];
+
+    if (conflictScore(chosen) > 0) {
+      const parts = [];
+      if (forbidden.length > 0) parts.push(`前日使用除外: ${forbidden.join('・')}`);
+      if (lowPriority.length > 0 && normal.length === 0) parts.push(`2日前使用(低優先): ${lowPriority.join('・')}`);
+      const conflicting = participants
+        .filter(name => personRidden[name]?.has(chosen))
+        .map(name => {
+          const g = gradeOf(name, groups);
+          return `${name}(${g === 'first' ? '1年' : g === 'second' ? '2年' : '3年'})`;
+        });
+      parts.push(`${chosen}は${conflicting.join('・')}が今月騎乗済み`);
+      reasons[date] = parts.join(' / ');
+    }
+
     result[date] = chosen;
     lastUsed[chosen] = date;
     for (const name of participants) {
@@ -129,7 +145,7 @@ function assignAsaUndoHorses(schedule, asaUndo, groups) {
     }
   }
 
-  return result;
+  return { assignments: result, reasons };
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -597,6 +613,7 @@ function AdminDetail({ surveyId }) {
   const [horses, setHorses] = useState({});
   const [asaUndo, setAsaUndo] = useState({});
   const [asaUndoHorse, setAsaUndoHorse] = useState({});
+  const [assignReasons, setAssignReasons] = useState({});
   const [gozenAssign, setGozenAssign] = useState({});
   const [horseNameSuggestions, setHorseNameSuggestions] = useState([]);
 
@@ -677,8 +694,9 @@ function AdminDetail({ surveyId }) {
   const remainDays = daysUntil(survey.deadline);
 
   const autoAssignAsaUndoHorses = async () => {
-    const newAssign = assignAsaUndoHorses(survey.schedule, asaUndo, survey.groups);
+    const { assignments: newAssign, reasons } = assignAsaUndoHorses(survey.schedule, asaUndo, survey.groups);
     setAsaUndoHorse(newAssign);
+    setAssignReasons(reasons);
     for (const [date, horse] of Object.entries(newAssign)) {
       try { await api.updateAsaUndoHorse(surveyId, date, horse); }
       catch (e) { console.error('馬割り当て保存失敗:', e.message); }
@@ -687,6 +705,7 @@ function AdminDetail({ surveyId }) {
 
   const saveAsaUndoHorse = async (date, horse) => {
     setAsaUndoHorse(prev => ({ ...prev, [date]: horse }));
+    setAssignReasons(prev => { const next = { ...prev }; delete next[date]; return next; });
     try { await api.updateAsaUndoHorse(surveyId, date, horse); }
     catch (e) { console.error('馬割り当て保存失敗:', e.message); }
   };
@@ -858,9 +877,10 @@ function AdminDetail({ surveyId }) {
           {survey.schedule.filter(day => day.slots.includes('朝運動')).map(day => {
             const attending = asaUndo[day.date] || [];
             const selectedHorse = asaUndoHorse[day.date] || '';
+            const reason = assignReasons[day.date];
             return (
               <div key={day.date} style={{ marginBottom: 10, paddingBottom: 10, borderBottom: '1px solid #0f1117' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
                   <span style={{
                     fontWeight: 700, fontSize: 12,
                     color: day.dow === 6 ? '#f87171' : day.dow === 5 ? '#60a5fa' : '#94a3b8',
@@ -878,6 +898,11 @@ function AdminDetail({ surveyId }) {
                     {ASA_UNDO_HORSES.map(h => <option key={h} value={h}>{h}</option>)}
                   </select>
                 </div>
+                {reason && (
+                  <div style={{ fontSize: 11, color: '#fbbf24', marginBottom: 4, paddingLeft: 2 }}>
+                    ⚠ 重複回避不可: {reason}
+                  </div>
+                )}
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
                   {allMembers.map(m => {
                     const on = attending.includes(m.name);
