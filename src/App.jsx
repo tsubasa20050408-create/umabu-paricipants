@@ -111,7 +111,7 @@ function assignAsaUndoHorses(schedule, asaUndo, groups) {
       participants.reduce((sum, name) => {
         if (!personRidden[name]?.has(h)) return sum;
         const grade = gradeOf(name, groups);
-        return sum + (grade === 'first' ? 3 : grade === 'second' ? 2 : 1);
+        return sum + (grade === 'first' ? 2 : 1);
       }, 0);
 
     const rank = (arr) => [...arr].sort((a, b) => {
@@ -137,11 +137,39 @@ function assignAsaUndoHorses(schedule, asaUndo, groups) {
       parts.push(`${chosen}は${conflicting.join('・')}が今月騎乗済み`);
       reasons[date] = parts.join(' / ');
 
-      // 修正案: 前日使用の馬を変更すれば今日使えるケースを提示
+      // 修正案: すべての日を対象に、変更で重複を解消できるケースを提示
       const fmtDate = (d) => { const [, m, day] = d.split('-'); return `${+m}/${+day}`; };
-      const suggestionList = forbidden
-        .filter(h => conflictScore(h) < conflictScore(chosen))
-        .map(h => `前日(${fmtDate(lastUsed[h])})の${h}を別の馬に変更 → 今日${h}が使用可能`);
+      const gradeWeight = (n) => gradeOf(n, groups) === 'first' ? 2 : 1;
+      const suggestionList = [];
+      for (const h of ASA_UNDO_HORSES) {
+        if (h === chosen) continue;
+        const hScore = conflictScore(h);
+        const gap = lastUsed[h] ? daysBetween(lastUsed[h], date) : 99;
+        if (gap <= 2 && lastUsed[h]) {
+          // 前日/2日前使用制限中 → その日を変えると h が使用可能
+          if (hScore < conflictScore(chosen)) {
+            const label = gap <= 1 ? '前日' : '2日前';
+            suggestionList.push(`${label}(${fmtDate(lastUsed[h])})の${h}を別の馬に変更 → 今日${h}が使用可能`);
+          }
+        } else if (hScore > 0) {
+          // 使用可能だが月内重複あり → 原因の日付を特定して提示
+          const conflictingNames = participants.filter(name => personRidden[name]?.has(h));
+          for (const [pastDate, pastHorse] of Object.entries(result)) {
+            if (pastHorse !== h) continue;
+            const affected = conflictingNames.filter(name => (asaUndo[pastDate] || []).includes(name));
+            if (affected.length === 0) continue;
+            const reduction = affected.reduce((s, n) => s + gradeWeight(n), 0);
+            if (hScore - reduction < conflictScore(chosen)) {
+              const labels = affected.map(n => {
+                const g = gradeOf(n, groups);
+                return `${n}(${g === 'first' ? '1年' : '2・3年'})`;
+              });
+              suggestionList.push(`${fmtDate(pastDate)}日の${h}を別の馬に変更 → ${labels.join('・')}の重複解消で${h}が優先候補に`);
+              break;
+            }
+          }
+        }
+      }
       if (suggestionList.length > 0) {
         suggestions[date] = suggestionList.join(' / ');
       }
