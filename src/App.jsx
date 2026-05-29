@@ -80,10 +80,9 @@ const ASA_UNDO_HORSES = ['イト', 'ツムギ', 'シュウ', 'スモモ'];
 const daysBetween = (d1, d2) =>
   Math.round((new Date(d2) - new Date(d1)) / 86400000);
 
-// 朝運動使用馬を1日1頭で自動割り当て
+// 朝運動使用馬を1日1頭で自動割り当て（日付順1ループで処理）
 // 制約: ①前日使用禁止 ②2日後使用は低優先 ③月内で同じ人に同じ馬を割り当てない（conflictCount最小化）
-function assignAsaUndoHorses(schedule, asaUndo, existingAssign) {
-  // existingAssign: { "date": horseName }
+function assignAsaUndoHorses(schedule, asaUndo) {
   const asaDates = schedule
     .filter(d => d.slots.includes('朝運動'))
     .map(d => d.date)
@@ -94,18 +93,6 @@ function assignAsaUndoHorses(schedule, asaUndo, existingAssign) {
   const personRidden = {};
 
   for (const date of asaDates) {
-    if (!existingAssign[date]) continue;
-    const horse = existingAssign[date];
-    lastUsed[horse] = date;
-    result[date] = horse;
-    for (const name of (asaUndo[date] || [])) {
-      personRidden[name] = personRidden[name] || new Set();
-      personRidden[name].add(horse);
-    }
-  }
-
-  for (const date of asaDates) {
-    if (result[date]) continue;
     const participants = asaUndo[date] || [];
     if (participants.length === 0) continue;
 
@@ -685,7 +672,7 @@ function AdminDetail({ surveyId }) {
   const remainDays = daysUntil(survey.deadline);
 
   const autoAssignAsaUndoHorses = async () => {
-    const newAssign = assignAsaUndoHorses(survey.schedule, asaUndo, asaUndoHorse);
+    const newAssign = assignAsaUndoHorses(survey.schedule, asaUndo);
     setAsaUndoHorse(newAssign);
     for (const [date, horse] of Object.entries(newAssign)) {
       try { await api.updateAsaUndoHorse(surveyId, date, horse); }
