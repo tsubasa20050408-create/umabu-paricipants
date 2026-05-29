@@ -82,7 +82,7 @@ const daysBetween = (d1, d2) =>
 
 // 朝運動使用馬を1日1頭で自動割り当て（日付順1ループで処理）
 // 制約: ①前日使用禁止 ②2日後使用は低優先 ③月内で同じ人に同じ馬を割り当てない（conflictCount最小化）
-function assignAsaUndoHorses(schedule, asaUndo) {
+function assignAsaUndoHorses(schedule, asaUndo, groups) {
   const asaDates = schedule
     .filter(d => d.slots.includes('朝運動'))
     .map(d => d.date)
@@ -104,11 +104,16 @@ function assignAsaUndoHorses(schedule, asaUndo) {
       else normal.push(h);
     }
 
-    const conflictCount = (h) =>
-      participants.filter(name => personRidden[name]?.has(h)).length;
+    // 1年生の重複を優先解消: 1年生=3, 2年生=2, 3年生=1 のweight
+    const conflictScore = (h) =>
+      participants.reduce((sum, name) => {
+        if (!personRidden[name]?.has(h)) return sum;
+        const grade = gradeOf(name, groups);
+        return sum + (grade === 'first' ? 3 : grade === 'second' ? 2 : 1);
+      }, 0);
 
     const rank = (arr) => [...arr].sort((a, b) => {
-      const ca = conflictCount(a), cb = conflictCount(b);
+      const ca = conflictScore(a), cb = conflictScore(b);
       if (ca !== cb) return ca - cb;
       const ga = lastUsed[a] ? daysBetween(lastUsed[a], date) : 999;
       const gb = lastUsed[b] ? daysBetween(lastUsed[b], date) : 999;
@@ -672,7 +677,7 @@ function AdminDetail({ surveyId }) {
   const remainDays = daysUntil(survey.deadline);
 
   const autoAssignAsaUndoHorses = async () => {
-    const newAssign = assignAsaUndoHorses(survey.schedule, asaUndo);
+    const newAssign = assignAsaUndoHorses(survey.schedule, asaUndo, survey.groups);
     setAsaUndoHorse(newAssign);
     for (const [date, horse] of Object.entries(newAssign)) {
       try { await api.updateAsaUndoHorse(surveyId, date, horse); }
