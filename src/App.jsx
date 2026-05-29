@@ -892,6 +892,49 @@ function AdminDetail({ surveyId }) {
               </div>
             );
           })}
+
+          {/* 人×馬 重複チェック */}
+          {(() => {
+            const history = {};
+            for (const day of survey.schedule.filter(d => d.slots.includes('朝運動'))) {
+              const horse = asaUndoHorse[day.date];
+              if (!horse) continue;
+              for (const name of (asaUndo[day.date] || [])) {
+                history[name] = history[name] || {};
+                history[name][horse] = (history[name][horse] || 0) + 1;
+              }
+            }
+            const entries = Object.entries(history);
+            if (entries.length === 0) return null;
+            const conflicts = entries.filter(([, hm]) => Object.values(hm).some(c => c > 1));
+            return (
+              <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #1e293b' }}>
+                <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8, color: conflicts.length > 0 ? '#f87171' : '#6ee7b7' }}>
+                  {conflicts.length > 0 ? `⚠ 重複あり（${conflicts.length}名）` : '✓ 重複なし'}
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {entries.map(([name, horseMap]) => {
+                    const hasConflict = Object.values(horseMap).some(c => c > 1);
+                    return (
+                      <div key={name} style={{
+                        fontSize: 11, padding: '3px 8px', borderRadius: 6,
+                        background: hasConflict ? '#3b1f1f' : '#0f1117',
+                        border: `1px solid ${hasConflict ? '#f87171' : '#1e293b'}`,
+                        color: hasConflict ? '#fca5a5' : '#64748b',
+                      }}>
+                        {name}:{' '}
+                        {Object.entries(horseMap).map(([h, c]) => (
+                          <span key={h} style={{ color: c > 1 ? '#f87171' : '#94a3b8', fontWeight: c > 1 ? 700 : 400 }}>
+                            {h}{c > 1 ? `×${c}` : ''}
+                          </span>
+                        )).reduce((acc, el, i) => i === 0 ? [el] : [...acc, '・', el], [])}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
         </div>
 
         {survey.schedule.some(day => day.dow === 6 && day.slots.includes('午前')) && (
