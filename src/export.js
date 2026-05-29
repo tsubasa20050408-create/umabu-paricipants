@@ -2,8 +2,8 @@ import * as XLSX from 'xlsx';
 import { DOW_LABELS, excelSerial, orderedMembers } from './schedule.js';
 
 // May練習参加者.xlsx の形式で出力
-// 列: A=日付シリアル / B=曜日 / C=時限 / D=参加者(カンマ区切り) / E=朝運動の馬名
-export function exportPracticeXlsx({ year, month, schedule, responses, groups, horses = {} }) {
+// 列: A=日付シリアル / B=曜日 / C=時限 / D=参加者(カンマ区切り) / E=馬名
+export function exportPracticeXlsx({ year, month, schedule, responses, groups, horses = {}, asaUndo = {}, gozenAssign = {} }) {
   const members = orderedMembers(groups);
   const wb = XLSX.utils.book_new();
   const aoa = [];
@@ -12,10 +12,38 @@ export function exportPracticeXlsx({ year, month, schedule, responses, groups, h
     let firstRow = true;
     for (const slot of day.slots) {
       const key = `${day.date}__${slot}`;
+
+      if (slot === '朝運動') {
+        const names = asaUndo[day.date] || [];
+        aoa.push([
+          firstRow ? excelSerial(day.date) : '',
+          firstRow ? DOW_LABELS[day.dow] : '',
+          '朝運動',
+          names.join('、'),
+          '',
+        ]);
+        firstRow = false;
+        continue;
+      }
+
+      if (slot === '午前' && gozenAssign[day.date]) {
+        for (const koma of ['1限', '2限']) {
+          const names = gozenAssign[day.date][koma] || [];
+          aoa.push([
+            firstRow ? excelSerial(day.date) : '',
+            firstRow ? DOW_LABELS[day.dow] : '',
+            koma,
+            names.join('、'),
+            horses[`${day.date}__${koma}`] || '',
+          ]);
+          firstRow = false;
+        }
+        continue;
+      }
+
       const attendees = members
         .filter(m => responses[m.name]?.slots?.[key])
         .map(m => m.name);
-
       aoa.push([
         firstRow ? excelSerial(day.date) : '',
         firstRow ? DOW_LABELS[day.dow] : '',

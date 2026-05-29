@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { api, tokenStore } from './api.js';
 import {
   buildMonthSchedule, INITIAL_GROUPS, GRADE_LABEL, GRADE_ORDER, GRADE_COLOR,
-  DOW_LABELS, orderedMembers, gradeOf,
+  DOW_LABELS, orderedMembers, gradeOf, ADMIN_ONLY_SLOTS,
 } from './schedule.js';
 import { exportPracticeXlsx } from './export.js';
 
@@ -44,6 +44,31 @@ function daysUntil(dateStr) {
   if (!dateStr) return null;
   const diff = new Date(dateStr + 'T23:59:59') - new Date();
   return Math.ceil(diff / 86400000);
+}
+
+// 午前参加者を1限/2限に自動振り分け
+// ルール: 上級生(2・3年)/下級生(1年)を均等に分け、個人ごとの1限/2限回数を均等に
+function assignGozen(date, attendees, existingAssign) {
+  const upper = attendees.filter(m => ['second', 'third'].includes(m.grade));
+  const lower = attendees.filter(m => m.grade === 'first');
+
+  const cnt1 = {}, cnt2 = {};
+  for (const [d, a] of Object.entries(existingAssign)) {
+    if (d >= date) continue;
+    (a['1限'] || []).forEach(n => { cnt1[n] = (cnt1[n] || 0) + 1; });
+    (a['2限'] || []).forEach(n => { cnt2[n] = (cnt2[n] || 0) + 1; });
+  }
+
+  const diff = m => (cnt1[m.name] || 0) - (cnt2[m.name] || 0);
+  const sorted_u = [...upper].sort((a, b) => diff(a) - diff(b));
+  const sorted_l = [...lower].sort((a, b) => diff(a) - diff(b));
+  const half_u = Math.ceil(sorted_u.length / 2);
+  const half_l = Math.ceil(sorted_l.length / 2);
+
+  return {
+    '1限': [...sorted_u.slice(0, half_u), ...sorted_l.slice(0, half_l)].map(m => m.name),
+    '2限': [...sorted_u.slice(half_u), ...sorted_l.slice(half_l)].map(m => m.name),
+  };
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -447,12 +472,16 @@ function AdminDetail({ surveyId }) {
   const [copiedPending, setCopiedPending] = useState(false);
   const [refreshAt, setRefreshAt] = useState(Date.now());
   const [horses, setHorses] = useState({});
+  const [asaUndo, setAsaUndo] = useState({});
+  const [gozenAssign, setGozenAssign] = useState({});
 
   const load = useCallback(async () => {
     try {
       const { survey } = await api.getSurveyFull(surveyId);
       setSurvey(survey);
       setHorses(survey.horses || {});
+      setAsaUndo(survey.asaUndo || {});
+      setGozenAssign(survey.gozenAssign || {});
     } catch (e) {
       if (e.status === 404) setSurvey(null);
       else console.error(e);
@@ -490,6 +519,27 @@ function AdminDetail({ surveyId }) {
     catch (e) { console.error('馬名保存失敗:', e.message); }
   };
 
+  const toggleAsaUndo = async (date, name) => {
+    const current = asaUndo[date] || [];
+    const next = current.includes(name)
+      ? current.filter(n => n !== name)
+      : [...current, name];
+    setAsaUndo(prev => ({ ...prev, [date]: next }));
+    try { await api.updateAsaUndo(surveyId, date, next); }
+    catch (e) { console.error('朝運動保存失敗:', e.message); }
+  };
+
+  const toggleGozen = async (date, name, assign) => {
+    const in1 = assign['1限'] || [];
+    const in2 = assign['2限'] || [];
+    const next = in1.includes(name)
+      ? { '1限': in1.filter(n => n !== name), '2限': [...in2, name] }
+      : { '1限': [...in1, name], '2限': in2.filter(n => n !== name) };
+    setGozenAssign(prev => ({ ...prev, [date]: next }));
+    try { await api.updateGozenAssign(surveyId, date, next); }
+    catch (e) { console.error('振り分け保存失敗:', e.message); }
+  };
+
   if (loading) return <div style={PAGE}><div style={{ padding: 40, textAlign: 'center' }}>読み込み中...</div></div>;
   if (!survey) return <div style={PAGE}><div style={{ padding: 40, textAlign: 'center', color: '#f87171' }}>調査が見つかりません <a href="#" style={{ color: '#93c5fd' }}>戻る</a></div></div>;
 
@@ -499,10 +549,20 @@ function AdminDetail({ surveyId }) {
   const pending = allMembers.filter(m => !responses[m.name]);
   const remainDays = daysUntil(survey.deadline);
 
+  const autoAssignGozen = async (date) => {
+    const key = `${date}__午前`;
+    const attendees = allMembers.filter(m => responses[m.name]?.slots?.[key]);
+    const assign = assignGozen(date, attendees, gozenAssign);
+    setGozenAssign(prev => ({ ...prev, [date]: assign }));
+    try { await api.updateGozenAssign(surveyId, date, assign); }
+    catch (e) { console.error('振り分け保存失敗:', e.message); }
+  };
+
   const handleExport = () => {
     exportPracticeXlsx({
       year: survey.year, month: survey.month,
       schedule: survey.schedule, responses, groups: survey.groups, horses,
+      asaUndo, gozenAssign,
     });
   };
 
@@ -599,36 +659,132 @@ function AdminDetail({ surveyId }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {survey.schedule.map(day => day.slots.map((slot, i) => {
-                    const key = `${day.date}__${slot}`;
-                    const attendees = allMembers
-                      .filter(m => responses[m.name]?.slots?.[key])
-                      .map(m => m.name);
-                    return (
-                      <tr key={key} style={{ borderTop: '1px solid #0f1117' }}>
-                        <td style={{ padding: 5 }}>{i === 0 ? `${survey.month}/${day.day}` : ''}</td>
-                        <td style={{ padding: 5, textAlign: 'center', color: day.dow === 6 ? '#f87171' : day.dow === 5 ? '#60a5fa' : '#94a3b8' }}>
-                          {i === 0 ? DOW_LABELS[day.dow] : ''}
-                        </td>
-                        <td style={{ padding: 5, color: '#fbbf24' }}>{slot}</td>
-                        <td style={{ padding: 5 }}>{attendees.join('、') || <span style={{ color: '#334155' }}>—</span>}</td>
-                        <td style={{ padding: 5 }}>
-                          <input
-                            defaultValue={horses[key] || ''}
-                            onBlur={e => saveHorse(key, e.target.value)}
-                            placeholder="馬名を入力"
-                            style={{
-                              ...INPUT, fontSize: 12, padding: '3px 8px',
-                              width: 140, border: '1px solid #334155',
-                            }}
-                          />
-                        </td>
-                      </tr>
-                    );
-                  }))}
+                  {survey.schedule.map(day => {
+                    const visibleSlots = day.slots.filter(s => !ADMIN_ONLY_SLOTS.has(s));
+                    return visibleSlots.map((slot, i) => {
+                      const key = `${day.date}__${slot}`;
+                      const attendees = allMembers
+                        .filter(m => responses[m.name]?.slots?.[key])
+                        .map(m => m.name);
+                      return (
+                        <tr key={key} style={{ borderTop: '1px solid #0f1117' }}>
+                          <td style={{ padding: 5 }}>{i === 0 ? `${survey.month}/${day.day}` : ''}</td>
+                          <td style={{ padding: 5, textAlign: 'center', color: day.dow === 6 ? '#f87171' : day.dow === 5 ? '#60a5fa' : '#94a3b8' }}>
+                            {i === 0 ? DOW_LABELS[day.dow] : ''}
+                          </td>
+                          <td style={{ padding: 5, color: '#fbbf24' }}>{slot}</td>
+                          <td style={{ padding: 5 }}>{attendees.join('、') || <span style={{ color: '#334155' }}>—</span>}</td>
+                          <td style={{ padding: 5 }}>
+                            <input
+                              defaultValue={horses[key] || ''}
+                              onBlur={e => saveHorse(key, e.target.value)}
+                              placeholder="馬名を入力"
+                              style={{
+                                ...INPUT, fontSize: 12, padding: '3px 8px',
+                                width: 140, border: '1px solid #334155',
+                              }}
+                            />
+                          </td>
+                        </tr>
+                      );
+                    });
+                  })}
                 </tbody>
               </table>
             </div>
+          </div>
+        )}
+
+        <div style={CARD}>
+          <div style={{ fontWeight: 700, marginBottom: 12 }}>🌅 朝運動記録</div>
+          <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10 }}>
+            参加した人をクリックして記録（即時保存）
+          </div>
+          {survey.schedule.filter(day => day.slots.includes('朝運動')).map(day => {
+            const attending = asaUndo[day.date] || [];
+            return (
+              <div key={day.date} style={{ marginBottom: 10, paddingBottom: 10, borderBottom: '1px solid #0f1117' }}>
+                <div style={{
+                  fontWeight: 700, fontSize: 12, marginBottom: 6,
+                  color: day.dow === 6 ? '#f87171' : day.dow === 5 ? '#60a5fa' : '#94a3b8',
+                }}>
+                  {survey.month}/{day.day}（{DOW_LABELS[day.dow]}）
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                  {allMembers.map(m => {
+                    const on = attending.includes(m.name);
+                    return (
+                      <button key={m.name} onClick={() => toggleAsaUndo(day.date, m.name)} style={{
+                        padding: '3px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 12,
+                        background: on ? '#064e3b' : '#1e293b',
+                        color: on ? '#6ee7b7' : '#64748b',
+                        border: `1px solid ${on ? '#10b981' : '#334155'}`,
+                        fontWeight: on ? 700 : 400,
+                      }}>
+                        {on ? '✓' : '·'} {m.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {survey.schedule.some(day => day.dow === 6 && day.slots.includes('午前')) && (
+          <div style={CARD}>
+            <div style={{ fontWeight: 700, marginBottom: 8 }}>📅 日曜午前 振り分け</div>
+            <div style={{ fontSize: 12, color: '#64748b', marginBottom: 12 }}>
+              午前参加者を1限・2限に振り分けます（上級生/下級生を均等配分、個人の回数差を最小化）
+            </div>
+            {survey.schedule.filter(day => day.dow === 6 && day.slots.includes('午前')).map(day => {
+              const key = `${day.date}__午前`;
+              const gozenAttendees = allMembers.filter(m => responses[m.name]?.slots?.[key]);
+              const assign = gozenAssign[day.date] || {};
+              const in1 = assign['1限'] || [];
+              const in2 = assign['2限'] || [];
+              return (
+                <div key={day.date} style={{ marginBottom: 16, paddingBottom: 16, borderBottom: '1px solid #0f1117' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8, flexWrap: 'wrap' }}>
+                    <span style={{ fontWeight: 700, color: '#f87171', fontSize: 13 }}>
+                      {survey.month}/{day.day}（日）
+                    </span>
+                    <span style={{ color: '#64748b', fontSize: 12 }}>
+                      午前参加: {gozenAttendees.length > 0 ? gozenAttendees.map(m => m.name).join('、') : 'なし'}
+                    </span>
+                    <button
+                      onClick={() => autoAssignGozen(day.date)}
+                      disabled={gozenAttendees.length === 0}
+                      style={{
+                        marginLeft: 'auto', padding: '4px 14px', fontSize: 12,
+                        background: '#1e3a5f', color: '#93c5fd',
+                        border: 'none', borderRadius: 6, cursor: gozenAttendees.length === 0 ? 'not-allowed' : 'pointer',
+                        fontWeight: 600, opacity: gozenAttendees.length === 0 ? 0.5 : 1,
+                      }}>🔀 自動振り分け</button>
+                  </div>
+                  {(in1.length > 0 || in2.length > 0) && (
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                      {['1限', '2限'].map(koma => (
+                        <div key={koma}>
+                          <div style={{ color: '#fbbf24', fontWeight: 700, fontSize: 12, marginBottom: 4 }}>{koma}</div>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                            {(koma === '1限' ? in1 : in2).map(name => (
+                              <button key={name} onClick={() => toggleGozen(day.date, name, assign)}
+                                title={`クリックで${koma === '1限' ? '2限' : '1限'}に移動`}
+                                style={{
+                                  padding: '3px 9px', borderRadius: 6, fontSize: 11,
+                                  background: '#1e293b', color: '#e2e8f0',
+                                  border: '1px solid #334155', cursor: 'pointer',
+                                }}>{name} ⇄</button>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
 
@@ -674,10 +830,10 @@ function MemberView({ surveyId }) {
   }, [surveyId]);
 
   const toggle = (key) => setSlots(prev => ({ ...prev, [key]: !prev[key] }));
-  const toggleDay = (day, on) => {
+  const toggleDay = (day, memberSlots, on) => {
     setSlots(prev => {
       const next = { ...prev };
-      day.slots.forEach(s => { next[`${day.date}__${s}`] = on; });
+      memberSlots.forEach(s => { next[`${day.date}__${s}`] = on; });
       return next;
     });
   };
@@ -774,7 +930,9 @@ function MemberView({ surveyId }) {
                   </div>
                   <div style={{ display: 'grid', gap: 10 }}>
                     {survey.schedule.map(day => {
-                      const allOn = day.slots.every(s => slots[`${day.date}__${s}`]);
+                      const memberSlots = day.slots.filter(s => !ADMIN_ONLY_SLOTS.has(s));
+                      if (memberSlots.length === 0) return null;
+                      const allOn = memberSlots.every(s => slots[`${day.date}__${s}`]);
                       return (
                         <div key={day.date} style={{
                           background: '#0f1117', borderRadius: 10, padding: '12px 14px',
@@ -787,7 +945,7 @@ function MemberView({ surveyId }) {
                             }}>
                               {survey.month}/{day.day} ({DOW_LABELS[day.dow]})
                             </span>
-                            <button onClick={() => toggleDay(day, !allOn)} style={{
+                            <button onClick={() => toggleDay(day, memberSlots, !allOn)} style={{
                               marginLeft: 'auto', fontSize: 11, padding: '3px 10px',
                               background: allOn ? '#3b1f1f' : '#064e3b',
                               color: allOn ? '#fca5a5' : '#6ee7b7',
@@ -797,7 +955,7 @@ function MemberView({ surveyId }) {
                             </button>
                           </div>
                           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                            {day.slots.map(s => {
+                            {memberSlots.map(s => {
                               const key = `${day.date}__${s}`;
                               const on = !!slots[key];
                               return (

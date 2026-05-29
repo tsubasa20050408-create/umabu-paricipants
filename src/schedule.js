@@ -12,6 +12,9 @@ export const WEEKLY_SLOTS = {
 
 export const DOW_LABELS = ['月', '火', '水', '木', '金', '土', '日'];
 
+// 参加者フォームに表示しない（管理者が記録する）スロット
+export const ADMIN_ONLY_SLOTS = new Set(['朝運動']);
+
 // 学年別メンバー（shift-app と同一）
 export const INITIAL_GROUPS = {
   third:  ['日下部', '須藤', '松﨑', '新行内', '中林', '渡邊', '高杉'],

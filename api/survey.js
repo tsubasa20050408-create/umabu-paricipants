@@ -103,6 +103,34 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true });
     }
 
+    if (action === 'updateAsaUndo') {
+      if (!isAuthed(req)) return res.status(401).json({ error: 'unauthorized' });
+      const { id, date, names } = body;
+      if (!id || !date || !Array.isArray(names)) {
+        return res.status(400).json({ error: 'invalid_payload' });
+      }
+      const survey = await redis.get(KEY(id));
+      if (!survey) return res.status(404).json({ error: 'not_found' });
+      survey.asaUndo = survey.asaUndo || {};
+      survey.asaUndo[date] = names;
+      await redis.set(KEY(id), survey);
+      return res.status(200).json({ ok: true });
+    }
+
+    if (action === 'updateGozenAssign') {
+      if (!isAuthed(req)) return res.status(401).json({ error: 'unauthorized' });
+      const { id, date, assign } = body;
+      if (!id || !date || typeof assign !== 'object') {
+        return res.status(400).json({ error: 'invalid_payload' });
+      }
+      const survey = await redis.get(KEY(id));
+      if (!survey) return res.status(404).json({ error: 'not_found' });
+      survey.gozenAssign = survey.gozenAssign || {};
+      survey.gozenAssign[date] = assign;
+      await redis.set(KEY(id), survey);
+      return res.status(200).json({ ok: true });
+    }
+
     if (action === 'delete') {
       if (!isAuthed(req)) return res.status(401).json({ error: 'unauthorized' });
       const { id } = body;
