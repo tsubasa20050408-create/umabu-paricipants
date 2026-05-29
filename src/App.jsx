@@ -815,7 +815,8 @@ function MemberView({ surveyId }) {
   const [selectedName, setSelectedName] = useState('');
   const [slots, setSlots] = useState({});
   const [submitting, setSubmitting] = useState(false);
-  const [done, setDone] = useState(false);
+  const [mode, setMode] = useState('select'); // 'select' | 'confirm' | 'form' | 'done'
+  const [savedSubmission, setSavedSubmission] = useState(null);
 
   useEffect(() => {
     (async () => {
@@ -828,6 +829,23 @@ function MemberView({ surveyId }) {
       } finally { setLoading(false); }
     })();
   }, [surveyId]);
+
+  const lsKey = (name) => `submit_${surveyId}_${name}`;
+
+  const selectName = (name) => {
+    setSelectedName(name);
+    const raw = localStorage.getItem(lsKey(name));
+    if (raw) {
+      try {
+        setSavedSubmission(JSON.parse(raw));
+        setMode('confirm');
+        return;
+      } catch { /* ignore parse error, fall through */ }
+    }
+    setSavedSubmission(null);
+    setSlots({});
+    setMode('form');
+  };
 
   const toggle = (key) => setSlots(prev => ({ ...prev, [key]: !prev[key] }));
   const toggleDay = (day, memberSlots, on) => {
@@ -848,10 +866,18 @@ function MemberView({ surveyId }) {
         grade: gradeOf(selectedName, survey.groups) ?? 'first',
         slots,
       });
-      setDone(true);
+      const now = new Date().toISOString();
+      const submission = { slots, submittedAt: now };
+      localStorage.setItem(lsKey(selectedName), JSON.stringify(submission));
+      setSavedSubmission(submission);
+      setMode('done');
     } catch (e) {
       alert('送信失敗: ' + e.message);
     } finally { setSubmitting(false); }
+  };
+
+  const resetToSelect = () => {
+    setSelectedName(''); setSlots({}); setSavedSubmission(null); setMode('select');
   };
 
   if (loading) return <div style={PAGE}><div style={{ padding: 40, textAlign: 'center' }}>読み込み中...</div></div>;
@@ -860,7 +886,7 @@ function MemberView({ surveyId }) {
   const remainDays = daysUntil(survey.deadline);
   const isExpired = survey.deadline && remainDays !== null && remainDays < 0;
 
-  if (done) {
+  if (mode === 'done') {
     return (
       <div style={PAGE}>
         <div style={{ maxWidth: 500, margin: '60px auto', padding: 24, textAlign: 'center' }}>
@@ -869,9 +895,86 @@ function MemberView({ surveyId }) {
           <div style={{ color: '#94a3b8', marginBottom: 24 }}>
             {selectedName} さんの{survey.year}年{survey.month}月分の希望を受け付けました
           </div>
-          <button onClick={() => { setDone(false); setSelectedName(''); setSlots({}); }} style={BTN_PRIMARY}>
-            別の人で入力
-          </button>
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+            <button onClick={() => setMode('confirm')} style={{
+              ...BTN_PRIMARY, background: '#1e293b', boxShadow: 'none',
+              border: '1px solid #334155', color: '#94a3b8',
+            }}>
+              📋 回答を確認する
+            </button>
+            <button onClick={resetToSelect} style={BTN_PRIMARY}>
+              別の人で入力
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (mode === 'confirm' && savedSubmission) {
+    const fmt = new Date(savedSubmission.submittedAt).toLocaleString('ja-JP', {
+      year: 'numeric', month: 'numeric', day: 'numeric',
+      hour: '2-digit', minute: '2-digit',
+    });
+    return (
+      <div style={PAGE}>
+        <div style={{ maxWidth: 720, margin: '0 auto', padding: 24 }}>
+          <h1 style={{ fontSize: 22, fontWeight: 800, marginBottom: 4 }}>
+            🐴 {survey.year}年{survey.month}月 練習参加調査
+          </h1>
+          <div style={CARD}>
+            <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>
+              {selectedName} さんの提出済み回答
+            </div>
+            <div style={{ fontSize: 12, color: '#64748b', marginBottom: 16 }}>
+              提出日時: {fmt}
+            </div>
+            <div style={{ display: 'grid', gap: 8 }}>
+              {survey.schedule.map(day => {
+                const memberSlots = day.slots.filter(s => !ADMIN_ONLY_SLOTS.has(s));
+                if (memberSlots.length === 0) return null;
+                return (
+                  <div key={day.date} style={{
+                    background: '#0f1117', borderRadius: 10, padding: '10px 14px',
+                    borderLeft: `3px solid ${day.dow === 6 ? '#f87171' : day.dow === 5 ? '#60a5fa' : '#334155'}`,
+                  }}>
+                    <div style={{
+                      fontWeight: 700, marginBottom: 6, fontSize: 14,
+                      color: day.dow === 6 ? '#f87171' : day.dow === 5 ? '#60a5fa' : '#f8fafc',
+                    }}>
+                      {survey.month}/{day.day}（{DOW_LABELS[day.dow]}）
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                      {memberSlots.map(s => {
+                        const on = !!savedSubmission.slots[`${day.date}__${s}`];
+                        return (
+                          <span key={s} style={{
+                            padding: '4px 12px', borderRadius: 6, fontSize: 13, fontWeight: 600,
+                            background: on ? '#064e3b' : '#1e293b',
+                            color: on ? '#6ee7b7' : '#475569',
+                            border: `1px solid ${on ? '#10b981' : '#1e293b'}`,
+                          }}>
+                            {on ? '○' : '×'} {s}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{ display: 'flex', gap: 10, marginTop: 16, flexWrap: 'wrap' }}>
+              <button onClick={() => { setSlots(savedSubmission.slots); setMode('form'); }} style={BTN_PRIMARY}>
+                ✏️ 修正する
+              </button>
+              <button onClick={resetToSelect} style={{
+                padding: '8px 20px', background: '#1e293b', border: '1px solid #334155',
+                borderRadius: 10, color: '#94a3b8', fontWeight: 700, fontSize: 14, cursor: 'pointer',
+              }}>
+                別の人で確認
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -900,28 +1003,47 @@ function MemberView({ surveyId }) {
         {isExpired ? null : (
           <>
             <div style={CARD}>
-              <div style={{ fontWeight: 700, marginBottom: 12 }}>① あなたの名前を選択</div>
+              <div style={{ fontWeight: 700, marginBottom: 4 }}>① あなたの名前を選択</div>
+              <div style={{ fontSize: 12, color: '#64748b', marginBottom: 12 }}>
+                ✓ マークは前回の回答があります
+              </div>
               {GRADE_ORDER.map(g => (
                 <div key={g} style={{ marginBottom: 12 }}>
                   <div style={{ color: GRADE_COLOR[g], fontWeight: 700, marginBottom: 6, fontSize: 13 }}>
                     {GRADE_LABEL[g]}
                   </div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                    {survey.groups[g].map(name => (
-                      <button key={name} onClick={() => setSelectedName(name)} style={{
-                        padding: '6px 14px', borderRadius: 8, cursor: 'pointer',
-                        border: `1px solid ${selectedName === name ? GRADE_COLOR[g] : '#334155'}`,
-                        background: selectedName === name ? GRADE_COLOR[g] + '33' : '#0f1117',
-                        color: selectedName === name ? GRADE_COLOR[g] : '#cbd5e1',
-                        fontWeight: selectedName === name ? 700 : 500, fontSize: 14,
-                      }}>{name}</button>
-                    ))}
+                    {survey.groups[g].map(name => {
+                      const hasSaved = !!localStorage.getItem(lsKey(name));
+                      const isSelected = selectedName === name;
+                      return (
+                        <button key={name} onClick={() => selectName(name)} style={{
+                          padding: '6px 14px', borderRadius: 8, cursor: 'pointer',
+                          border: `1px solid ${isSelected ? GRADE_COLOR[g] : '#334155'}`,
+                          background: isSelected ? GRADE_COLOR[g] + '33' : '#0f1117',
+                          color: isSelected ? GRADE_COLOR[g] : '#cbd5e1',
+                          fontWeight: isSelected ? 700 : 500, fontSize: 14,
+                          position: 'relative',
+                        }}>
+                          {name}
+                          {hasSaved && (
+                            <span style={{
+                              position: 'absolute', top: -5, right: -5,
+                              fontSize: 9, background: '#10b981', color: '#fff',
+                              borderRadius: '50%', width: 14, height: 14,
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              fontWeight: 900,
+                            }}>✓</span>
+                          )}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               ))}
             </div>
 
-            {selectedName && (
+            {mode === 'form' && (
               <>
                 <div style={CARD}>
                   <div style={{ fontWeight: 700, marginBottom: 8 }}>② 参加できる日程にチェック</div>
