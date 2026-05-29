@@ -67,4 +67,13 @@ export const api = {
 
   updateGozenAssign: (id, date, assign) =>
     call('/api/survey', { method: 'POST', auth: true, body: { action: 'updateGozenAssign', id, date, assign } }),
+
+  getHorseNames: () =>
+    call('/api/survey?resource=horseNames', { auth: true }),
+
+  updateAsaUndoHorses: (id, date, assign) =>
+    call('/api/survey', { method: 'POST', auth: true, body: { action: 'updateAsaUndoHorses', id, date, assign } }),
+
+  changePin: (newPin) =>
+    call('/api/survey', { method: 'POST', auth: true, body: { action: 'changePin', newPin } }),
 };

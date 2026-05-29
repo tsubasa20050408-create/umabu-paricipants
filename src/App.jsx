@@ -74,6 +74,79 @@ function assignGozen(date, attendees, existingAssign) {
   };
 }
 
+// 朝運動で使用する馬リスト（固定）
+const ASA_UNDO_HORSES = ['イト', 'ツムギ', 'シュウ', 'スモモ'];
+
+const daysBetween = (d1, d2) =>
+  Math.round((new Date(d2) - new Date(d1)) / 86400000);
+
+// 朝運動参加者に使用馬を自動割り当て
+// 制約: ①同一人物×同一馬は月内1回のみ ②前日使用馬は禁止 ③2日前使用馬は低優先
+function assignAsaUndoHorses(schedule, asaUndo, existingAssign) {
+  const asaDates = schedule
+    .filter(d => d.slots.includes('朝運動'))
+    .map(d => d.date)
+    .sort();
+
+  const result = {};
+  const lastUsed = {};
+  const personHistory = {};
+
+  for (const date of asaDates) {
+    if (!existingAssign[date]) continue;
+    const assign = existingAssign[date];
+    new Set(Object.values(assign)).forEach(h => { lastUsed[h] = date; });
+    for (const [name, horse] of Object.entries(assign)) {
+      personHistory[name] = personHistory[name] || new Set();
+      personHistory[name].add(horse);
+    }
+    result[date] = assign;
+  }
+
+  for (const date of asaDates) {
+    if (result[date]) continue;
+    const participants = asaUndo[date] || [];
+    if (participants.length === 0) continue;
+
+    const forbidden = [], lowPriority = [], normal = [];
+    for (const h of ASA_UNDO_HORSES) {
+      const gap = lastUsed[h] ? daysBetween(lastUsed[h], date) : 99;
+      if (gap <= 1) forbidden.push(h);
+      else if (gap === 2) lowPriority.push(h);
+      else normal.push(h);
+    }
+
+    const sessionCount = Object.fromEntries(ASA_UNDO_HORSES.map(h => [h, 0]));
+    const assign = {};
+
+    const sorted = [...participants].sort((a, b) =>
+      (personHistory[a]?.size || 0) - (personHistory[b]?.size || 0)
+    );
+
+    for (const name of sorted) {
+      const ridden = personHistory[name] || new Set();
+      const byCount = (arr) => [...arr].sort((a, b) => sessionCount[a] - sessionCount[b]);
+      const chosen =
+        byCount(normal).find(h => !ridden.has(h)) ??
+        byCount(lowPriority).find(h => !ridden.has(h)) ??
+        byCount(normal)[0] ??
+        byCount(lowPriority)[0] ??
+        byCount(forbidden).find(h => !ridden.has(h)) ??
+        byCount(forbidden)[0];
+
+      assign[name] = chosen;
+      sessionCount[chosen]++;
+      personHistory[name] = personHistory[name] || new Set();
+      personHistory[name].add(chosen);
+    }
+
+    result[date] = assign;
+    new Set(Object.values(assign)).forEach(h => { lastUsed[h] = date; });
+  }
+
+  return result;
+}
+
 // ════════════════════════════════════════════════════════════════
 // PINロック画面
 // ════════════════════════════════════════════════════════════════
@@ -198,6 +271,9 @@ function AdminHome() {
   const today = new Date();
   const nextMonth = today.getMonth() + 2;
   const [tab, setTab] = useState('survey');
+  const [newPin, setNewPin] = useState('');
+  const [confirmPin, setConfirmPin] = useState('');
+  const [pinMsg, setPinMsg] = useState('');
   const [year, setYear] = useState(nextMonth > 12 ? today.getFullYear() + 1 : today.getFullYear());
   const [month, setMonth] = useState(nextMonth > 12 ? 1 : nextMonth);
   const [deadline, setDeadline] = useState('');
@@ -320,6 +396,16 @@ function AdminHome() {
     await saveGroups(next, prev);
   };
 
+  const handleChangePin = async () => {
+    try {
+      await api.changePin(newPin);
+      setPinMsg('PINを変更しました。次回ログイン時から新しいPINが有効になります。');
+      setNewPin(''); setConfirmPin('');
+    } catch (e) {
+      setPinMsg('変更失敗: ' + e.message);
+    }
+  };
+
   const logout = () => { tokenStore.clear(); window.location.reload(); };
 
   const tabStyle = (key) => ({
@@ -344,6 +430,7 @@ function AdminHome() {
         <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
           <button style={tabStyle('survey')} onClick={() => setTab('survey')}>📅 調査</button>
           <button style={tabStyle('staff')} onClick={() => setTab('staff')}>👥 スタッフ</button>
+          <button style={tabStyle('settings')} onClick={() => setTab('settings')}>⚙️ 設定</button>
         </div>
 
         {/* ─── 調査タブ ─── */}
@@ -399,6 +486,54 @@ function AdminHome() {
               </div>
             </div>
           </>
+        )}
+
+        {/* ─── 設定タブ ─── */}
+        {tab === 'settings' && (
+          <div style={CARD}>
+            <div style={{ fontWeight: 700, marginBottom: 16 }}>🔑 管理者PIN変更</div>
+            <div style={{ fontSize: 13, color: '#94a3b8', marginBottom: 12 }}>
+              新しいPIN（4〜8桁の数字）
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxWidth: 280 }}>
+              <input
+                type="password"
+                inputMode="numeric"
+                maxLength={8}
+                value={newPin}
+                onChange={e => setNewPin(e.target.value.replace(/\D/g, ''))}
+                placeholder="新しいPIN"
+                style={INPUT}
+              />
+              <input
+                type="password"
+                inputMode="numeric"
+                maxLength={8}
+                value={confirmPin}
+                onChange={e => setConfirmPin(e.target.value.replace(/\D/g, ''))}
+                placeholder="確認のため再入力"
+                style={INPUT}
+              />
+              <button
+                onClick={handleChangePin}
+                disabled={newPin.length < 4 || newPin !== confirmPin}
+                style={{
+                  ...BTN_PRIMARY,
+                  opacity: newPin.length < 4 || newPin !== confirmPin ? 0.5 : 1,
+                }}
+              >
+                変更する
+              </button>
+              {pinMsg && (
+                <div style={{
+                  fontSize: 13, color: pinMsg.startsWith('変更失敗') ? '#f87171' : '#6ee7b7',
+                  padding: '8px 12px', background: '#0f1117', borderRadius: 8,
+                }}>
+                  {pinMsg}
+                </div>
+              )}
+            </div>
+          </div>
         )}
 
         {/* ─── スタッフタブ ─── */}
@@ -476,7 +611,9 @@ function AdminDetail({ surveyId }) {
   const [refreshAt, setRefreshAt] = useState(Date.now());
   const [horses, setHorses] = useState({});
   const [asaUndo, setAsaUndo] = useState({});
+  const [asaUndoHorses, setAsaUndoHorses] = useState({});
   const [gozenAssign, setGozenAssign] = useState({});
+  const [horseNameSuggestions, setHorseNameSuggestions] = useState([]);
 
   const load = useCallback(async () => {
     try {
@@ -484,7 +621,9 @@ function AdminDetail({ surveyId }) {
       setSurvey(survey);
       setHorses(survey.horses || {});
       setAsaUndo(survey.asaUndo || {});
+      setAsaUndoHorses(survey.asaUndoHorses || {});
       setGozenAssign(survey.gozenAssign || {});
+      api.getHorseNames().then(r => setHorseNameSuggestions(r.names || [])).catch(() => {});
     } catch (e) {
       if (e.status === 404) setSurvey(null);
       else console.error(e);
@@ -552,6 +691,22 @@ function AdminDetail({ surveyId }) {
   const pending = allMembers.filter(m => !responses[m.name]);
   const remainDays = daysUntil(survey.deadline);
 
+  const autoAssignAsaUndoHorses = async () => {
+    const newAssign = assignAsaUndoHorses(survey.schedule, asaUndo, asaUndoHorses);
+    setAsaUndoHorses(newAssign);
+    for (const [date, assign] of Object.entries(newAssign)) {
+      try { await api.updateAsaUndoHorses(surveyId, date, assign); }
+      catch (e) { console.error('馬割り当て保存失敗:', e.message); }
+    }
+  };
+
+  const saveAsaUndoHorse = async (date, name, horse) => {
+    const next = { ...(asaUndoHorses[date] || {}), [name]: horse };
+    setAsaUndoHorses(prev => ({ ...prev, [date]: next }));
+    try { await api.updateAsaUndoHorses(surveyId, date, next); }
+    catch (e) { console.error('馬割り当て保存失敗:', e.message); }
+  };
+
   const autoAssignGozen = async (date) => {
     const key = `${date}__午前`;
     const attendees = allMembers.filter(m => responses[m.name]?.slots?.[key]);
@@ -565,7 +720,7 @@ function AdminDetail({ surveyId }) {
     exportPracticeXlsx({
       year: survey.year, month: survey.month,
       schedule: survey.schedule, responses, groups: survey.groups, horses,
-      asaUndo, gozenAssign,
+      asaUndo, gozenAssign, asaUndoHorses,
     });
   };
 
@@ -650,6 +805,9 @@ function AdminDetail({ surveyId }) {
             <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10 }}>
               馬名欄はフォーカスを外すと自動保存されます
             </div>
+            <datalist id="horse-names-list">
+              {horseNameSuggestions.map(n => <option key={n} value={n} />)}
+            </datalist>
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                 <thead>
@@ -682,6 +840,7 @@ function AdminDetail({ surveyId }) {
                               defaultValue={horses[key] || ''}
                               onBlur={e => saveHorse(key, e.target.value)}
                               placeholder="馬名を入力"
+                              list="horse-names-list"
                               style={{
                                 ...INPUT, fontSize: 12, padding: '3px 8px',
                                 width: 140, border: '1px solid #334155',
@@ -699,12 +858,22 @@ function AdminDetail({ surveyId }) {
         )}
 
         <div style={CARD}>
-          <div style={{ fontWeight: 700, marginBottom: 12 }}>🌅 朝運動記録</div>
+          <div style={{ display: 'flex', alignItems: 'center', marginBottom: 12 }}>
+            <div style={{ fontWeight: 700 }}>🌅 朝運動記録</div>
+            <button
+              onClick={autoAssignAsaUndoHorses}
+              style={{
+                marginLeft: 'auto', padding: '4px 14px', fontSize: 12,
+                background: '#1e3a5f', color: '#93c5fd',
+                border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600,
+              }}>🐴 馬を自動配置</button>
+          </div>
           <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10 }}>
-            参加した人をクリックして記録（即時保存）
+            参加した人をクリックして記録。馬名は自動配置後にドロップダウンで調整できます。
           </div>
           {survey.schedule.filter(day => day.slots.includes('朝運動')).map(day => {
             const attending = asaUndo[day.date] || [];
+            const horseAssign = asaUndoHorses[day.date] || {};
             return (
               <div key={day.date} style={{ marginBottom: 10, paddingBottom: 10, borderBottom: '1px solid #0f1117' }}>
                 <div style={{
@@ -717,15 +886,29 @@ function AdminDetail({ surveyId }) {
                   {allMembers.map(m => {
                     const on = attending.includes(m.name);
                     return (
-                      <button key={m.name} onClick={() => toggleAsaUndo(day.date, m.name)} style={{
-                        padding: '3px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 12,
-                        background: on ? '#064e3b' : '#1e293b',
-                        color: on ? '#6ee7b7' : '#64748b',
-                        border: `1px solid ${on ? '#10b981' : '#334155'}`,
-                        fontWeight: on ? 700 : 400,
-                      }}>
-                        {on ? '✓' : '·'} {m.name}
-                      </button>
+                      <div key={m.name} style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                        <button onClick={() => toggleAsaUndo(day.date, m.name)} style={{
+                          padding: '3px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 12,
+                          background: on ? '#064e3b' : '#1e293b',
+                          color: on ? '#6ee7b7' : '#64748b',
+                          border: `1px solid ${on ? '#10b981' : '#334155'}`,
+                          fontWeight: on ? 700 : 400,
+                        }}>
+                          {on ? '✓' : '·'} {m.name}
+                        </button>
+                        {on && (
+                          <select
+                            value={horseAssign[m.name] || ''}
+                            onChange={e => saveAsaUndoHorse(day.date, m.name, e.target.value)}
+                            style={{
+                              ...INPUT, fontSize: 11, padding: '2px 4px',
+                              width: 68, border: '1px solid #334155',
+                            }}>
+                            <option value="">--</option>
+                            {ASA_UNDO_HORSES.map(h => <option key={h} value={h}>{h}</option>)}
+                          </select>
+                        )}
+                      </div>
                     );
                   })}
                 </div>

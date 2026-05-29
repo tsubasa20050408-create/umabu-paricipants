@@ -18,6 +18,12 @@ export default async function handler(req, res) {
       return res.status(200).json({ groups });
     }
 
+    if (resource === 'horseNames') {
+      if (!isAuthed(req)) return res.status(401).json({ error: 'unauthorized' });
+      const names = (await redis.get('practice:horseNames')) || [];
+      return res.status(200).json({ names });
+    }
+
     if (!id) {
       // list (admin only)
       if (!isAuthed(req)) return res.status(401).json({ error: 'unauthorized' });
@@ -100,6 +106,12 @@ export default async function handler(req, res) {
       if (!survey) return res.status(404).json({ error: 'not_found' });
       survey.horses = horses;
       await redis.set(KEY(id), survey);
+      const newNames = Object.values(horses).filter(v => v && v.trim());
+      if (newNames.length > 0) {
+        const existing = (await redis.get('practice:horseNames')) || [];
+        const merged = [...new Set([...existing, ...newNames.map(n => n.trim())])];
+        await redis.set('practice:horseNames', merged);
+      }
       return res.status(200).json({ ok: true });
     }
 
@@ -131,6 +143,20 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true });
     }
 
+    if (action === 'updateAsaUndoHorses') {
+      if (!isAuthed(req)) return res.status(401).json({ error: 'unauthorized' });
+      const { id, date, assign } = body;
+      if (!id || !date || typeof assign !== 'object') {
+        return res.status(400).json({ error: 'invalid_payload' });
+      }
+      const survey = await redis.get(KEY(id));
+      if (!survey) return res.status(404).json({ error: 'not_found' });
+      survey.asaUndoHorses = survey.asaUndoHorses || {};
+      survey.asaUndoHorses[date] = assign;
+      await redis.set(KEY(id), survey);
+      return res.status(200).json({ ok: true });
+    }
+
     if (action === 'delete') {
       if (!isAuthed(req)) return res.status(401).json({ error: 'unauthorized' });
       const { id } = body;
@@ -138,6 +164,16 @@ export default async function handler(req, res) {
       await redis.del(KEY(id));
       const list = ((await redis.get(INDEX_KEY)) || []).filter(s => s.id !== id);
       await redis.set(INDEX_KEY, list);
+      return res.status(200).json({ ok: true });
+    }
+
+    if (action === 'changePin') {
+      if (!isAuthed(req)) return res.status(401).json({ error: 'unauthorized' });
+      const { newPin } = body;
+      if (!newPin || typeof newPin !== 'string' || !/^\d{4,8}$/.test(newPin.trim())) {
+        return res.status(400).json({ error: 'invalid_pin_format' });
+      }
+      await redis.set('practice:pin', newPin.trim());
       return res.status(200).json({ ok: true });
     }
 
