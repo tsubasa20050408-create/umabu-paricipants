@@ -80,9 +80,10 @@ const ASA_UNDO_HORSES = ['イト', 'ツムギ', 'シュウ', 'スモモ'];
 const daysBetween = (d1, d2) =>
   Math.round((new Date(d2) - new Date(d1)) / 86400000);
 
-// 朝運動参加者に使用馬を自動割り当て
-// 制約: ①同一人物×同一馬は月内1回のみ ②前日使用馬は禁止 ③2日前使用馬は低優先
+// 朝運動使用馬を1日1頭で自動割り当て
+// 制約: ①前日使用禁止 ②2日後使用は低優先 ③月内で同じ人に同じ馬を割り当てない（conflictCount最小化）
 function assignAsaUndoHorses(schedule, asaUndo, existingAssign) {
+  // existingAssign: { "date": horseName }
   const asaDates = schedule
     .filter(d => d.slots.includes('朝運動'))
     .map(d => d.date)
@@ -90,17 +91,17 @@ function assignAsaUndoHorses(schedule, asaUndo, existingAssign) {
 
   const result = {};
   const lastUsed = {};
-  const personHistory = {};
+  const personRidden = {};
 
   for (const date of asaDates) {
     if (!existingAssign[date]) continue;
-    const assign = existingAssign[date];
-    new Set(Object.values(assign)).forEach(h => { lastUsed[h] = date; });
-    for (const [name, horse] of Object.entries(assign)) {
-      personHistory[name] = personHistory[name] || new Set();
-      personHistory[name].add(horse);
+    const horse = existingAssign[date];
+    lastUsed[horse] = date;
+    result[date] = horse;
+    for (const name of (asaUndo[date] || [])) {
+      personRidden[name] = personRidden[name] || new Set();
+      personRidden[name].add(horse);
     }
-    result[date] = assign;
   }
 
   for (const date of asaDates) {
@@ -116,32 +117,24 @@ function assignAsaUndoHorses(schedule, asaUndo, existingAssign) {
       else normal.push(h);
     }
 
-    const sessionCount = Object.fromEntries(ASA_UNDO_HORSES.map(h => [h, 0]));
-    const assign = {};
+    const conflictCount = (h) =>
+      participants.filter(name => personRidden[name]?.has(h)).length;
 
-    const sorted = [...participants].sort((a, b) =>
-      (personHistory[a]?.size || 0) - (personHistory[b]?.size || 0)
-    );
+    const rank = (arr) => [...arr].sort((a, b) => {
+      const ca = conflictCount(a), cb = conflictCount(b);
+      if (ca !== cb) return ca - cb;
+      const ga = lastUsed[a] ? daysBetween(lastUsed[a], date) : 999;
+      const gb = lastUsed[b] ? daysBetween(lastUsed[b], date) : 999;
+      return gb - ga;
+    });
 
-    for (const name of sorted) {
-      const ridden = personHistory[name] || new Set();
-      const byCount = (arr) => [...arr].sort((a, b) => sessionCount[a] - sessionCount[b]);
-      const chosen =
-        byCount(normal).find(h => !ridden.has(h)) ??
-        byCount(lowPriority).find(h => !ridden.has(h)) ??
-        byCount(normal)[0] ??
-        byCount(lowPriority)[0] ??
-        byCount(forbidden).find(h => !ridden.has(h)) ??
-        byCount(forbidden)[0];
-
-      assign[name] = chosen;
-      sessionCount[chosen]++;
-      personHistory[name] = personHistory[name] || new Set();
-      personHistory[name].add(chosen);
+    const chosen = rank(normal)[0] ?? rank(lowPriority)[0] ?? rank(forbidden)[0];
+    result[date] = chosen;
+    lastUsed[chosen] = date;
+    for (const name of participants) {
+      personRidden[name] = personRidden[name] || new Set();
+      personRidden[name].add(chosen);
     }
-
-    result[date] = assign;
-    new Set(Object.values(assign)).forEach(h => { lastUsed[h] = date; });
   }
 
   return result;
@@ -611,7 +604,7 @@ function AdminDetail({ surveyId }) {
   const [refreshAt, setRefreshAt] = useState(Date.now());
   const [horses, setHorses] = useState({});
   const [asaUndo, setAsaUndo] = useState({});
-  const [asaUndoHorses, setAsaUndoHorses] = useState({});
+  const [asaUndoHorse, setAsaUndoHorse] = useState({});
   const [gozenAssign, setGozenAssign] = useState({});
   const [horseNameSuggestions, setHorseNameSuggestions] = useState([]);
 
@@ -621,7 +614,7 @@ function AdminDetail({ surveyId }) {
       setSurvey(survey);
       setHorses(survey.horses || {});
       setAsaUndo(survey.asaUndo || {});
-      setAsaUndoHorses(survey.asaUndoHorses || {});
+      setAsaUndoHorse(survey.asaUndoHorse || {});
       setGozenAssign(survey.gozenAssign || {});
       api.getHorseNames().then(r => setHorseNameSuggestions(r.names || [])).catch(() => {});
     } catch (e) {
@@ -692,18 +685,17 @@ function AdminDetail({ surveyId }) {
   const remainDays = daysUntil(survey.deadline);
 
   const autoAssignAsaUndoHorses = async () => {
-    const newAssign = assignAsaUndoHorses(survey.schedule, asaUndo, asaUndoHorses);
-    setAsaUndoHorses(newAssign);
-    for (const [date, assign] of Object.entries(newAssign)) {
-      try { await api.updateAsaUndoHorses(surveyId, date, assign); }
+    const newAssign = assignAsaUndoHorses(survey.schedule, asaUndo, asaUndoHorse);
+    setAsaUndoHorse(newAssign);
+    for (const [date, horse] of Object.entries(newAssign)) {
+      try { await api.updateAsaUndoHorse(surveyId, date, horse); }
       catch (e) { console.error('馬割り当て保存失敗:', e.message); }
     }
   };
 
-  const saveAsaUndoHorse = async (date, name, horse) => {
-    const next = { ...(asaUndoHorses[date] || {}), [name]: horse };
-    setAsaUndoHorses(prev => ({ ...prev, [date]: next }));
-    try { await api.updateAsaUndoHorses(surveyId, date, next); }
+  const saveAsaUndoHorse = async (date, horse) => {
+    setAsaUndoHorse(prev => ({ ...prev, [date]: horse }));
+    try { await api.updateAsaUndoHorse(surveyId, date, horse); }
     catch (e) { console.error('馬割り当て保存失敗:', e.message); }
   };
 
@@ -720,7 +712,7 @@ function AdminDetail({ surveyId }) {
     exportPracticeXlsx({
       year: survey.year, month: survey.month,
       schedule: survey.schedule, responses, groups: survey.groups, horses,
-      asaUndo, gozenAssign, asaUndoHorses,
+      asaUndo, gozenAssign, asaUndoHorse,
     });
   };
 
@@ -873,42 +865,40 @@ function AdminDetail({ surveyId }) {
           </div>
           {survey.schedule.filter(day => day.slots.includes('朝運動')).map(day => {
             const attending = asaUndo[day.date] || [];
-            const horseAssign = asaUndoHorses[day.date] || {};
+            const selectedHorse = asaUndoHorse[day.date] || '';
             return (
               <div key={day.date} style={{ marginBottom: 10, paddingBottom: 10, borderBottom: '1px solid #0f1117' }}>
-                <div style={{
-                  fontWeight: 700, fontSize: 12, marginBottom: 6,
-                  color: day.dow === 6 ? '#f87171' : day.dow === 5 ? '#60a5fa' : '#94a3b8',
-                }}>
-                  {survey.month}/{day.day}（{DOW_LABELS[day.dow]}）
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
+                  <span style={{
+                    fontWeight: 700, fontSize: 12,
+                    color: day.dow === 6 ? '#f87171' : day.dow === 5 ? '#60a5fa' : '#94a3b8',
+                  }}>
+                    {survey.month}/{day.day}（{DOW_LABELS[day.dow]}）
+                  </span>
+                  <select
+                    value={selectedHorse}
+                    onChange={e => saveAsaUndoHorse(day.date, e.target.value)}
+                    style={{
+                      ...INPUT, fontSize: 12, padding: '2px 6px',
+                      width: 90, border: '1px solid #334155',
+                    }}>
+                    <option value="">馬名--</option>
+                    {ASA_UNDO_HORSES.map(h => <option key={h} value={h}>{h}</option>)}
+                  </select>
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
                   {allMembers.map(m => {
                     const on = attending.includes(m.name);
                     return (
-                      <div key={m.name} style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                        <button onClick={() => toggleAsaUndo(day.date, m.name)} style={{
-                          padding: '3px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 12,
-                          background: on ? '#064e3b' : '#1e293b',
-                          color: on ? '#6ee7b7' : '#64748b',
-                          border: `1px solid ${on ? '#10b981' : '#334155'}`,
-                          fontWeight: on ? 700 : 400,
-                        }}>
-                          {on ? '✓' : '·'} {m.name}
-                        </button>
-                        {on && (
-                          <select
-                            value={horseAssign[m.name] || ''}
-                            onChange={e => saveAsaUndoHorse(day.date, m.name, e.target.value)}
-                            style={{
-                              ...INPUT, fontSize: 11, padding: '2px 4px',
-                              width: 68, border: '1px solid #334155',
-                            }}>
-                            <option value="">--</option>
-                            {ASA_UNDO_HORSES.map(h => <option key={h} value={h}>{h}</option>)}
-                          </select>
-                        )}
-                      </div>
+                      <button key={m.name} onClick={() => toggleAsaUndo(day.date, m.name)} style={{
+                        padding: '3px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 12,
+                        background: on ? '#064e3b' : '#1e293b',
+                        color: on ? '#6ee7b7' : '#64748b',
+                        border: `1px solid ${on ? '#10b981' : '#334155'}`,
+                        fontWeight: on ? 700 : 400,
+                      }}>
+                        {on ? '✓' : '·'} {m.name}
+                      </button>
                     );
                   })}
                 </div>

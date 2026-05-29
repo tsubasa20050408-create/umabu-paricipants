@@ -3,7 +3,7 @@ import { DOW_LABELS, excelSerial, orderedMembers } from './schedule.js';
 
 // May練習参加者.xlsx の形式で出力
 // 列: A=日付シリアル / B=曜日 / C=時限 / D=参加者(カンマ区切り) / E=馬名
-export function exportPracticeXlsx({ year, month, schedule, responses, groups, horses = {}, asaUndo = {}, gozenAssign = {}, asaUndoHorses = {} }) {
+export function exportPracticeXlsx({ year, month, schedule, responses, groups, horses = {}, asaUndo = {}, gozenAssign = {}, asaUndoHorse = {} }) {
   const members = orderedMembers(groups);
   const wb = XLSX.utils.book_new();
   const aoa = [];
@@ -15,14 +15,12 @@ export function exportPracticeXlsx({ year, month, schedule, responses, groups, h
 
       if (slot === '朝運動') {
         const names = asaUndo[day.date] || [];
-        const horseAssign = asaUndoHorses[day.date] || {};
-        const horsesStr = names.map(n => horseAssign[n] ? `${n}:${horseAssign[n]}` : '').filter(Boolean).join('、');
         aoa.push([
           firstRow ? excelSerial(day.date) : '',
           firstRow ? DOW_LABELS[day.dow] : '',
           '朝運動',
           names.join('、'),
-          horsesStr,
+          asaUndoHorse[day.date] || '',
         ]);
         firstRow = false;
         continue;

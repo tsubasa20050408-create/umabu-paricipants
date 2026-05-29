@@ -143,16 +143,16 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true });
     }
 
-    if (action === 'updateAsaUndoHorses') {
+    if (action === 'updateAsaUndoHorse') {
       if (!isAuthed(req)) return res.status(401).json({ error: 'unauthorized' });
-      const { id, date, assign } = body;
-      if (!id || !date || typeof assign !== 'object') {
+      const { id, date, horse } = body;
+      if (!id || !date || typeof horse !== 'string') {
         return res.status(400).json({ error: 'invalid_payload' });
       }
       const survey = await redis.get(KEY(id));
       if (!survey) return res.status(404).json({ error: 'not_found' });
-      survey.asaUndoHorses = survey.asaUndoHorses || {};
-      survey.asaUndoHorses[date] = assign;
+      survey.asaUndoHorse = survey.asaUndoHorse || {};
+      survey.asaUndoHorse[date] = horse;
       await redis.set(KEY(id), survey);
       return res.status(200).json({ ok: true });
     }

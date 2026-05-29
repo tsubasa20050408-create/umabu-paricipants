@@ -71,8 +71,8 @@ export const api = {
   getHorseNames: () =>
     call('/api/survey?resource=horseNames', { auth: true }),
 
-  updateAsaUndoHorses: (id, date, assign) =>
-    call('/api/survey', { method: 'POST', auth: true, body: { action: 'updateAsaUndoHorses', id, date, assign } }),
+  updateAsaUndoHorse: (id, date, horse) =>
+    call('/api/survey', { method: 'POST', auth: true, body: { action: 'updateAsaUndoHorse', id, date, horse } }),
 
   changePin: (newPin) =>
     call('/api/survey', { method: 'POST', auth: true, body: { action: 'changePin', newPin } }),
