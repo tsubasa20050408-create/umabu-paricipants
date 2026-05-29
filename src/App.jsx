@@ -47,11 +47,8 @@ function daysUntil(dateStr) {
 }
 
 // 午前参加者を1限/2限に自動振り分け
-// ルール: 上級生(2・3年)/下級生(1年)を均等に分け、個人ごとの1限/2限回数を均等に
+// ルール: 3年/2年/1年それぞれを均等に分け、個人ごとの1限/2限回数を均等に
 function assignGozen(date, attendees, existingAssign) {
-  const upper = attendees.filter(m => ['second', 'third'].includes(m.grade));
-  const lower = attendees.filter(m => m.grade === 'first');
-
   const cnt1 = {}, cnt2 = {};
   for (const [d, a] of Object.entries(existingAssign)) {
     if (d >= date) continue;
@@ -60,14 +57,20 @@ function assignGozen(date, attendees, existingAssign) {
   }
 
   const diff = m => (cnt1[m.name] || 0) - (cnt2[m.name] || 0);
-  const sorted_u = [...upper].sort((a, b) => diff(a) - diff(b));
-  const sorted_l = [...lower].sort((a, b) => diff(a) - diff(b));
-  const half_u = Math.ceil(sorted_u.length / 2);
-  const half_l = Math.ceil(sorted_l.length / 2);
+
+  const splitGroup = (grade) => {
+    const group = [...attendees.filter(m => m.grade === grade)].sort((a, b) => diff(a) - diff(b));
+    const half = Math.ceil(group.length / 2);
+    return { in1: group.slice(0, half), in2: group.slice(half) };
+  };
+
+  const third = splitGroup('third');
+  const second = splitGroup('second');
+  const first = splitGroup('first');
 
   return {
-    '1限': [...sorted_u.slice(0, half_u), ...sorted_l.slice(0, half_l)].map(m => m.name),
-    '2限': [...sorted_u.slice(half_u), ...sorted_l.slice(half_l)].map(m => m.name),
+    '1限': [...third.in1, ...second.in1, ...first.in1].map(m => m.name),
+    '2限': [...third.in2, ...second.in2, ...first.in2].map(m => m.name),
   };
 }
 
