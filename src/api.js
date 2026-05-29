@@ -22,6 +22,10 @@ async function call(path, { method = 'GET', body, auth = false } = {}) {
   let data = null;
   try { data = await res.json(); } catch { /* empty */ }
   if (!res.ok) {
+    if (res.status === 401) {
+      tokenStore.clear();
+      window.dispatchEvent(new Event('auth:expired'));
+    }
     const err = new Error(data?.error || `HTTP ${res.status}`);
     err.status = res.status;
     throw err;

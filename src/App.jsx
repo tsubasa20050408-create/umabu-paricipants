@@ -847,6 +847,12 @@ export default function App() {
   const route = useHashRoute();
   const [authed, setAuthed] = useState(() => !!tokenStore.get());
 
+  useEffect(() => {
+    const handle = () => setAuthed(false);
+    window.addEventListener('auth:expired', handle);
+    return () => window.removeEventListener('auth:expired', handle);
+  }, []);
+
   if (route.kind === 'member') return <MemberView surveyId={route.surveyId} />;
   if (!authed) return <PinLock onUnlock={() => setAuthed(true)} />;
   if (route.kind === 'admin') return <AdminDetail surveyId={route.surveyId} />;

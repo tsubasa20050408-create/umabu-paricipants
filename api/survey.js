@@ -30,9 +30,9 @@ export default async function handler(req, res) {
       if (!isAuthed(req)) return res.status(401).json({ error: 'unauthorized' });
       return res.status(200).json({ survey });
     }
-    // public: schedule/groups/year/month のみ。responses は出さない
-    const { year, month, schedule, groups } = survey;
-    return res.status(200).json({ survey: { year, month, schedule, groups } });
+    // public: schedule/groups/year/month/deadline のみ。responses は出さない
+    const { year, month, schedule, groups, deadline } = survey;
+    return res.status(200).json({ survey: { year, month, schedule, groups, deadline } });
   }
 
   if (req.method === 'POST') {
@@ -51,13 +51,14 @@ export default async function handler(req, res) {
 
     if (action === 'create') {
       if (!isAuthed(req)) return res.status(401).json({ error: 'unauthorized' });
-      const { year, month, schedule, groups } = body;
+      const { year, month, schedule, groups, deadline } = body;
       if (!year || !month || !schedule || !groups) {
         return res.status(400).json({ error: 'invalid_payload' });
       }
       const id = genId();
       const survey = {
         id, year, month, schedule, groups, responses: {},
+        deadline: deadline || null,
         createdAt: new Date().toISOString(),
       };
       await redis.set(KEY(id), survey);
