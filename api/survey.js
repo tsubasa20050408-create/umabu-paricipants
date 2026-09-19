@@ -2,7 +2,30 @@ import { getRedis, isAuthed, genId } from './_lib.js';
 
 const INDEX_KEY = 'practice:surveys';
 const GROUPS_KEY = 'practice:groups';
+const WEEKLY_KEY = 'practice:weeklySlots';
 const KEY = (id) => `practice:survey:${id}`;
+
+// 時限パターンの検証（src/schedule.js は api/ から import できないため最小限を再実装）
+const ASA_SLOT = '朝運動';
+const KOMA_SLOTS = ['1限', '2限', '3限'];
+const GOZEN_SLOTS = ['午前', '午後'];
+const ALL_SLOTS = [ASA_SLOT, ...KOMA_SLOTS, ...GOZEN_SLOTS];
+const GOZEN_ALLOWED_DOW = [5, 6]; // 土・日のみ
+
+function isValidWeeklySlots(w) {
+  if (!w || typeof w !== 'object' || Array.isArray(w)) return false;
+  for (let dow = 0; dow <= 6; dow++) {
+    const slots = w[dow];
+    if (!Array.isArray(slots)) return false;
+    if (slots.some(s => typeof s !== 'string' || !ALL_SLOTS.includes(s))) return false;
+    if (new Set(slots).size !== slots.length) return false;
+    const hasGozen = slots.some(s => GOZEN_SLOTS.includes(s));
+    const hasKoma = slots.some(s => KOMA_SLOTS.includes(s));
+    if (hasGozen && !GOZEN_ALLOWED_DOW.includes(dow)) return false; // 月〜金に午前/午後は不可
+    if (hasGozen && hasKoma) return false;                          // 限と午前/午後は排他
+  }
+  return true;
+}
 
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
@@ -16,6 +39,12 @@ export default async function handler(req, res) {
       if (!isAuthed(req)) return res.status(401).json({ error: 'unauthorized' });
       const groups = await redis.get(GROUPS_KEY);
       return res.status(200).json({ groups });
+    }
+
+    if (resource === 'weeklySlots') {
+      if (!isAuthed(req)) return res.status(401).json({ error: 'unauthorized' });
+      const weeklySlots = await redis.get(WEEKLY_KEY);
+      return res.status(200).json({ weeklySlots });
     }
 
     if (resource === 'horseNames') {
@@ -52,6 +81,16 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'invalid_payload' });
       }
       await redis.set(GROUPS_KEY, groups);
+      return res.status(200).json({ ok: true });
+    }
+
+    if (action === 'updateWeeklySlots') {
+      if (!isAuthed(req)) return res.status(401).json({ error: 'unauthorized' });
+      const { weeklySlots } = body;
+      if (!isValidWeeklySlots(weeklySlots)) {
+        return res.status(400).json({ error: 'invalid_payload' });
+      }
+      await redis.set(WEEKLY_KEY, weeklySlots);
       return res.status(200).json({ ok: true });
     }
 

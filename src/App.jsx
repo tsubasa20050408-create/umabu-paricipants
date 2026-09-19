@@ -3,6 +3,8 @@ import { api, tokenStore } from './api.js';
 import {
   buildMonthSchedule, INITIAL_GROUPS, GRADE_LABEL, GRADE_ORDER, GRADE_COLOR,
   DOW_LABELS, orderedMembers, gradeOf, ADMIN_ONLY_SLOTS,
+  WEEKLY_SLOTS, KOMA_SLOTS, GOZEN_SLOTS, GOZEN_ALLOWED_DOW,
+  normalizeWeeklySlots, slotModeOf,
 } from './schedule.js';
 import { exportPracticeXlsx } from './export.js';
 
@@ -330,6 +332,14 @@ function AdminHome() {
   // スタッフ管理
   const [groups, setGroups] = useState(INITIAL_GROUPS);
   const [saving, setSaving] = useState(false);
+
+  // 練習時限パターン（既定値 = WEEKLY_SLOTS、保存済みがあれば上書き）
+  const [weeklySlots, setWeeklySlots] = useState(() => normalizeWeeklySlots(WEEKLY_SLOTS));
+  // 土日の指定モード。スロットが空でもモードを保持するため state で持つ
+  const [dowMode, setDowMode] = useState(() => {
+    const w = normalizeWeeklySlots(WEEKLY_SLOTS);
+    return { 5: slotModeOf(w[5]), 6: slotModeOf(w[6]) };
+  });
   const [newName, setNewName] = useState('');
   const [newGrade, setNewGrade] = useState('first');
 
@@ -348,7 +358,19 @@ function AdminHome() {
     } catch (e) { console.error(e); }
   }, []);
 
-  useEffect(() => { loadSurveys(); loadGroups(); }, [loadSurveys, loadGroups]);
+  const loadWeeklySlots = useCallback(async () => {
+    try {
+      const { weeklySlots: w } = await api.getWeeklySlots();
+      if (w) {
+        const norm = normalizeWeeklySlots(w);
+        setWeeklySlots(norm);
+        setDowMode({ 5: slotModeOf(norm[5]), 6: slotModeOf(norm[6]) });
+      }
+    } catch (e) { console.error(e); }
+  }, []);
+
+  useEffect(() => { loadSurveys(); loadGroups(); loadWeeklySlots(); },
+    [loadSurveys, loadGroups, loadWeeklySlots]);
 
   // #3: エラー時に前の状態にロールバック
   const saveGroups = async (next, prev) => {
@@ -361,10 +383,42 @@ function AdminHome() {
     } finally { setSaving(false); }
   };
 
+  const saveWeeklySlots = async (next, prev, prevMode) => {
+    setSaving(true);
+    try {
+      await api.updateWeeklySlots(next);
+    } catch (e) {
+      setWeeklySlots(prev);
+      if (prevMode) setDowMode(prevMode);
+      alert('保存失敗: ' + e.message);
+    } finally { setSaving(false); }
+  };
+
+  // 1つの時限のON/OFF
+  const toggleSlot = async (dow, slot) => {
+    const prev = weeklySlots;
+    const cur = prev[dow] || [];
+    const nextSlots = cur.includes(slot) ? cur.filter(s => s !== slot) : [...cur, slot];
+    const next = normalizeWeeklySlots({ ...prev, [dow]: nextSlots });
+    setWeeklySlots(next);
+    await saveWeeklySlots(next, prev);
+  };
+
+  // 土日の「限で指定 / 午前・午後で指定」切替（反対側のスロットは落とす＝排他）
+  const changeSlotMode = async (dow, mode) => {
+    if (dowMode[dow] === mode) return;
+    const prev = weeklySlots;
+    setDowMode(m => ({ ...m, [dow]: mode }));
+    if ((prev[dow] || []).length <= 1) return; // 朝運動のみ = 消すものがない
+    const next = normalizeWeeklySlots({ ...prev, [dow]: [] });
+    setWeeklySlots(next);
+    await saveWeeklySlots(next, prev, dowMode);
+  };
+
   const createSurvey = async () => {
     setCreating(true);
     try {
-      const schedule = buildMonthSchedule(year, month);
+      const schedule = buildMonthSchedule(year, month, weeklySlots);
       const { id } = await api.createSurvey({
         year, month, schedule, groups,
         deadline: deadline || null,
@@ -496,6 +550,14 @@ function AdminHome() {
               <div style={{ fontSize: 12, color: '#64748b', marginTop: 10 }}>
                 ※ 現在のスタッフ名簿（{groups.third.length + groups.second.length + groups.first.length}名）が使われます
               </div>
+              <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>
+                ※ 設定タブの練習時限パターンが使われます（
+                {DOW_LABELS.map((label, dow) => {
+                  const koma = (weeklySlots[dow] || []).filter(s => s !== '朝運動');
+                  return `${label}:${koma.length ? koma.join('・') : '朝運動のみ'}`;
+                }).join(' / ')}
+                ）
+              </div>
             </div>
 
             <div style={CARD}>
@@ -529,50 +591,113 @@ function AdminHome() {
 
         {/* ─── 設定タブ ─── */}
         {tab === 'settings' && (
-          <div style={CARD}>
-            <div style={{ fontWeight: 700, marginBottom: 16 }}>🔑 管理者PIN変更</div>
-            <div style={{ fontSize: 13, color: '#94a3b8', marginBottom: 12 }}>
-              新しいPIN（4〜8桁の数字）
+          <>
+            <div style={CARD}>
+              <div style={{ fontWeight: 700, marginBottom: 6 }}>🗓 練習時限パターン</div>
+              <div style={{ fontSize: 12, color: '#64748b', marginBottom: 14 }}>
+                曜日ごとの練習時限を設定します。朝運動は全曜日固定です。
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {DOW_LABELS.map((label, dow) => {
+                  const slots = weeklySlots[dow] || [];
+                  const gozenOk = GOZEN_ALLOWED_DOW.has(dow);
+                  const mode = gozenOk ? dowMode[dow] : 'koma';
+                  const options = mode === 'gozen' ? GOZEN_SLOTS : KOMA_SLOTS;
+                  return (
+                    <div key={dow} style={{
+                      padding: '10px 14px', background: '#0f1117', borderRadius: 8,
+                      display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+                    }}>
+                      <span style={{ fontWeight: 700, width: 16 }}>{label}</span>
+                      <span style={{
+                        fontSize: 11, color: '#64748b', border: '1px solid #334155',
+                        borderRadius: 6, padding: '2px 8px',
+                      }}>朝運動（固定）</span>
+
+                      {gozenOk && (
+                        <div style={{ display: 'flex', gap: 4 }}>
+                          {[['koma', '限で指定'], ['gozen', '午前・午後で指定']].map(([m, mLabel]) => (
+                            <button key={m} onClick={() => changeSlotMode(dow, m)} style={{
+                              padding: '3px 10px', fontSize: 11, borderRadius: 6, cursor: 'pointer',
+                              border: `1px solid ${mode === m ? '#6366f1' : '#334155'}`,
+                              background: mode === m ? '#6366f1' : 'transparent',
+                              color: mode === m ? '#fff' : '#94a3b8',
+                            }}>{mLabel}</button>
+                          ))}
+                        </div>
+                      )}
+
+                      <div style={{ display: 'flex', gap: 12, marginLeft: 'auto' }}>
+                        {options.map(s => (
+                          <label key={s} style={{
+                            display: 'flex', alignItems: 'center', gap: 4, fontSize: 13,
+                            cursor: saving ? 'default' : 'pointer',
+                            color: slots.includes(s) ? '#e2e8f0' : '#64748b',
+                          }}>
+                            <input
+                              type="checkbox"
+                              checked={slots.includes(s)}
+                              disabled={saving}
+                              onChange={() => toggleSlot(dow, s)}
+                            />
+                            {s}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div style={{ fontSize: 12, color: '#64748b', marginTop: 12 }}>
+                ※ 変更は次に作成する調査から反映されます（作成済みの調査はそのままです）
+              </div>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxWidth: 280 }}>
-              <input
-                type="password"
-                inputMode="numeric"
-                maxLength={8}
-                value={newPin}
-                onChange={e => setNewPin(e.target.value.replace(/\D/g, ''))}
-                placeholder="新しいPIN"
-                style={INPUT}
-              />
-              <input
-                type="password"
-                inputMode="numeric"
-                maxLength={8}
-                value={confirmPin}
-                onChange={e => setConfirmPin(e.target.value.replace(/\D/g, ''))}
-                placeholder="確認のため再入力"
-                style={INPUT}
-              />
-              <button
-                onClick={handleChangePin}
-                disabled={newPin.length < 4 || newPin !== confirmPin}
-                style={{
-                  ...BTN_PRIMARY,
-                  opacity: newPin.length < 4 || newPin !== confirmPin ? 0.5 : 1,
-                }}
-              >
-                変更する
-              </button>
-              {pinMsg && (
-                <div style={{
-                  fontSize: 13, color: pinMsg.startsWith('変更失敗') ? '#f87171' : '#6ee7b7',
-                  padding: '8px 12px', background: '#0f1117', borderRadius: 8,
-                }}>
-                  {pinMsg}
-                </div>
-              )}
+
+            <div style={CARD}>
+              <div style={{ fontWeight: 700, marginBottom: 16 }}>🔑 管理者PIN変更</div>
+              <div style={{ fontSize: 13, color: '#94a3b8', marginBottom: 12 }}>
+                新しいPIN（4〜8桁の数字）
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxWidth: 280 }}>
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  maxLength={8}
+                  value={newPin}
+                  onChange={e => setNewPin(e.target.value.replace(/\D/g, ''))}
+                  placeholder="新しいPIN"
+                  style={INPUT}
+                />
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  maxLength={8}
+                  value={confirmPin}
+                  onChange={e => setConfirmPin(e.target.value.replace(/\D/g, ''))}
+                  placeholder="確認のため再入力"
+                  style={INPUT}
+                />
+                <button
+                  onClick={handleChangePin}
+                  disabled={newPin.length < 4 || newPin !== confirmPin}
+                  style={{
+                    ...BTN_PRIMARY,
+                    opacity: newPin.length < 4 || newPin !== confirmPin ? 0.5 : 1,
+                  }}
+                >
+                  変更する
+                </button>
+                {pinMsg && (
+                  <div style={{
+                    fontSize: 13, color: pinMsg.startsWith('変更失敗') ? '#f87171' : '#6ee7b7',
+                    padding: '8px 12px', background: '#0f1117', borderRadius: 8,
+                  }}>
+                    {pinMsg}
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
+          </>
         )}
 
         {/* ─── スタッフタブ ─── */}
@@ -1014,13 +1139,13 @@ function AdminDetail({ surveyId }) {
           })()}
         </div>
 
-        {survey.schedule.some(day => day.dow === 6 && day.slots.includes('午前')) && (
+        {survey.schedule.some(day => day.slots.includes('午前')) && (
           <div style={CARD}>
-            <div style={{ fontWeight: 700, marginBottom: 8 }}>📅 日曜午前 振り分け</div>
+            <div style={{ fontWeight: 700, marginBottom: 8 }}>📅 午前 振り分け</div>
             <div style={{ fontSize: 12, color: '#64748b', marginBottom: 12 }}>
               午前参加者を1限・2限に振り分けます（上級生/下級生を均等配分、個人の回数差を最小化）
             </div>
-            {survey.schedule.filter(day => day.dow === 6 && day.slots.includes('午前')).map(day => {
+            {survey.schedule.filter(day => day.slots.includes('午前')).map(day => {
               const key = `${day.date}__午前`;
               const gozenAttendees = allMembers.filter(m => responses[m.name]?.slots?.[key]);
               const assign = gozenAssign[day.date] || {};
@@ -1029,8 +1154,11 @@ function AdminDetail({ surveyId }) {
               return (
                 <div key={day.date} style={{ marginBottom: 16, paddingBottom: 16, borderBottom: '1px solid #0f1117' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8, flexWrap: 'wrap' }}>
-                    <span style={{ fontWeight: 700, color: '#f87171', fontSize: 13 }}>
-                      {survey.month}/{day.day}（日）
+                    <span style={{
+                      fontWeight: 700, fontSize: 13,
+                      color: day.dow === 6 ? '#f87171' : day.dow === 5 ? '#60a5fa' : '#e2e8f0',
+                    }}>
+                      {survey.month}/{day.day}（{DOW_LABELS[day.dow]}）
                     </span>
                     <span style={{ color: '#64748b', fontSize: 12 }}>
                       午前参加: {gozenAttendees.length > 0 ? gozenAttendees.map(m => m.name).join('、') : 'なし'}
