@@ -341,6 +341,8 @@ function AdminHome() {
 
   // 練習時限パターン（既定値 = WEEKLY_SLOTS、保存済みがあれば上書き）
   const [weeklySlots, setWeeklySlots] = useState(() => normalizeWeeklySlots(WEEKLY_SLOTS));
+  // 読み込み状態。読み込み前/失敗のまま「➕ 作成」されると既定値で調査が作られてしまうため
+  const [weeklyLoaded, setWeeklyLoaded] = useState('loading');
   // 土日の指定モード。スロットが空でもモードを保持するため state で持つ
   const [dowMode, setDowMode] = useState(() => {
     const w = normalizeWeeklySlots(WEEKLY_SLOTS);
@@ -376,7 +378,9 @@ function AdminHome() {
         setWeeklySlots(norm);
         setDowMode({ 5: slotModeOf(norm[5]), 6: slotModeOf(norm[6]) });
       }
-    } catch (e) { console.error(e); }
+      // w が無い（サーバに保存値が無い）場合は既定値を使うのが正しいので 'ok' 扱い
+      setWeeklyLoaded('ok');
+    } catch (e) { console.error(e); setWeeklyLoaded('failed'); }
   }, []);
 
   const loadAsaHorses = useCallback(async () => {
@@ -599,20 +603,27 @@ function AdminHome() {
                 <input type="date" value={deadline} onChange={e => setDeadline(e.target.value)}
                   style={{ ...INPUT, colorScheme: 'dark' }} />
               </div>
-              <button onClick={createSurvey} disabled={creating} style={BTN_PRIMARY}>
+              <button onClick={createSurvey} disabled={creating || weeklyLoaded !== 'ok'} style={BTN_PRIMARY}>
                 {creating ? '作成中...' : '➕ 作成'}
               </button>
               <div style={{ fontSize: 12, color: '#64748b', marginTop: 10 }}>
                 ※ 現在のスタッフ名簿（{groups.third.length + groups.second.length + groups.first.length}名）が使われます
               </div>
-              <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>
-                ※ 設定タブの練習時限パターンが使われます（
-                {DOW_LABELS.map((label, dow) => {
-                  const koma = (weeklySlots[dow] || []).filter(s => s !== '朝運動');
-                  return `${label}:${koma.length ? koma.join('・') : '朝運動のみ'}`;
-                }).join(' / ')}
-                ）
-              </div>
+              {weeklyLoaded === 'ok' && (
+                <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>
+                  ※ 設定タブの練習時限パターンが使われます（
+                  {DOW_LABELS.map((label, dow) => {
+                    const koma = (weeklySlots[dow] || []).filter(s => s !== '朝運動');
+                    return `${label}:${koma.length ? koma.join('・') : '朝運動のみ'}`;
+                  }).join(' / ')}
+                  ）
+                </div>
+              )}
+              {weeklyLoaded === 'failed' && (
+                <div style={{ fontSize: 12, color: '#f87171', marginTop: 4 }}>
+                  ⚠ 時限パターンを読み込めませんでした。ページを再読み込みしてください
+                </div>
+              )}
             </div>
 
             <div style={CARD}>
@@ -672,8 +683,10 @@ function AdminHome() {
                       {gozenOk && (
                         <div style={{ display: 'flex', gap: 4 }}>
                           {[['koma', '限で指定'], ['gozen', '午前・午後で指定']].map(([m, mLabel]) => (
-                            <button key={m} onClick={() => changeSlotMode(dow, m)} style={{
-                              padding: '3px 10px', fontSize: 11, borderRadius: 6, cursor: 'pointer',
+                            <button key={m} onClick={() => changeSlotMode(dow, m)} disabled={saving} style={{
+                              padding: '3px 10px', fontSize: 11, borderRadius: 6,
+                              cursor: saving ? 'not-allowed' : 'pointer',
+                              opacity: saving ? 0.5 : 1,
                               border: `1px solid ${mode === m ? '#6366f1' : '#334155'}`,
                               background: mode === m ? '#6366f1' : 'transparent',
                               color: mode === m ? '#fff' : '#94a3b8',
@@ -699,6 +712,17 @@ function AdminHome() {
                           </label>
                         ))}
                       </div>
+
+                      {slots.length <= 1 && (
+                        <span style={{ fontSize: 11, color: '#64748b', width: '100%' }}>
+                          時限なし（朝運動のみ）
+                        </span>
+                      )}
+                      {gozenOk && mode === 'gozen' && !slots.includes('午前') && !slots.includes('午後') && (
+                        <span style={{ fontSize: 11, color: '#fbbf24', width: '100%' }}>
+                          ⚠ 午前・午後が未選択です
+                        </span>
+                      )}
                     </div>
                   );
                 })}

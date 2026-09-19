@@ -34,7 +34,8 @@ export function exportPracticeXlsx({ year, month, schedule, responses, groups, h
             firstRow ? DOW_LABELS[day.dow] : '',
             koma,
             names.join('、'),
-            horses[`${day.date}__${koma}`] || '',
+            // 集計・馬名入力テーブルは午前を1限/2限に分けず `${date}__午前` に保存するためフォールバック
+            horses[`${day.date}__${koma}`] || horses[`${day.date}__午前`] || '',
           ]);
           firstRow = false;
         }
