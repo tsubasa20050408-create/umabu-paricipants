@@ -3,6 +3,7 @@ import { getRedis, isAuthed, genId } from './_lib.js';
 const INDEX_KEY = 'practice:surveys';
 const GROUPS_KEY = 'practice:groups';
 const WEEKLY_KEY = 'practice:weeklySlots';
+const ASA_HORSES_KEY = 'practice:asaUndoHorses';
 const KEY = (id) => `practice:survey:${id}`;
 
 // 時限パターンの検証（src/schedule.js は api/ から import できないため最小限を再実装）
@@ -27,6 +28,35 @@ function isValidWeeklySlots(w) {
   return true;
 }
 
+// 朝運動の馬リスト: [{ name: 'イト', active: true }, ...]
+function isValidAsaUndoHorses(list) {
+  if (!Array.isArray(list) || list.length > 20) return false;
+  const names = new Set();
+  for (const h of list) {
+    if (!h || typeof h !== 'object' || Array.isArray(h)) return false;
+    if (typeof h.name !== 'string') return false;
+    const name = h.name.trim();
+    if (!name || name.length > 20) return false;
+    if (typeof h.active !== 'boolean') return false;
+    if (names.has(name)) return false;
+    names.add(name);
+  }
+  return true;
+}
+
+// その調査で使う馬名の配列
+function isValidHorseNameList(names) {
+  if (!Array.isArray(names) || names.length > 20) return false;
+  const seen = new Set();
+  for (const n of names) {
+    if (typeof n !== 'string') return false;
+    const name = n.trim();
+    if (!name || name.length > 20 || seen.has(name)) return false;
+    seen.add(name);
+  }
+  return true;
+}
+
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
   const redis = getRedis();
@@ -45,6 +75,12 @@ export default async function handler(req, res) {
       if (!isAuthed(req)) return res.status(401).json({ error: 'unauthorized' });
       const weeklySlots = await redis.get(WEEKLY_KEY);
       return res.status(200).json({ weeklySlots });
+    }
+
+    if (resource === 'asaUndoHorses') {
+      if (!isAuthed(req)) return res.status(401).json({ error: 'unauthorized' });
+      const horses = await redis.get(ASA_HORSES_KEY);
+      return res.status(200).json({ horses });
     }
 
     if (resource === 'horseNames') {
@@ -91,6 +127,29 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'invalid_payload' });
       }
       await redis.set(WEEKLY_KEY, weeklySlots);
+      return res.status(200).json({ ok: true });
+    }
+
+    if (action === 'updateAsaUndoHorses') {
+      if (!isAuthed(req)) return res.status(401).json({ error: 'unauthorized' });
+      const { horses } = body;
+      if (!isValidAsaUndoHorses(horses)) {
+        return res.status(400).json({ error: 'invalid_payload' });
+      }
+      await redis.set(ASA_HORSES_KEY, horses.map(h => ({ name: h.name.trim(), active: h.active })));
+      return res.status(200).json({ ok: true });
+    }
+
+    if (action === 'updateAsaUndoHorseEnabled') {
+      if (!isAuthed(req)) return res.status(401).json({ error: 'unauthorized' });
+      const { id, names } = body;
+      if (!id || !isValidHorseNameList(names)) {
+        return res.status(400).json({ error: 'invalid_payload' });
+      }
+      const survey = await redis.get(KEY(id));
+      if (!survey) return res.status(404).json({ error: 'not_found' });
+      survey.asaUndoHorseEnabled = names.map(n => n.trim());
+      await redis.set(KEY(id), survey);
       return res.status(200).json({ ok: true });
     }
 

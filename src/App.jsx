@@ -76,7 +76,9 @@ function assignGozen(date, attendees, existingAssign) {
   };
 }
 
-// 朝運動で使用する馬リスト（固定）
+// 朝運動で使用する馬リストの【既定値】
+// 管理画面の設定タブで編集した内容は Redis (practice:asaUndoHorses) に保存され、
+// そちらが優先される。ここはサーバ未設定時のフォールバック。
 const ASA_UNDO_HORSES = ['イト', 'ツムギ', 'シュウ', 'スモモ'];
 
 const daysBetween = (d1, d2) =>
@@ -84,7 +86,11 @@ const daysBetween = (d1, d2) =>
 
 // 朝運動使用馬を1日1頭で自動割り当て（日付順1ループで処理）
 // 制約: ①前日使用禁止 ②2日後使用は低優先 ③月内で同じ人に同じ馬を割り当てない（conflictCount最小化）
-function assignAsaUndoHorses(schedule, asaUndo, groups) {
+function assignAsaUndoHorses(schedule, asaUndo, groups, horseList = ASA_UNDO_HORSES) {
+  // 使用可能な馬が1頭もなければ何も割り当てない（undefined を保存しに行かせない）
+  if (!Array.isArray(horseList) || horseList.length === 0) {
+    return { assignments: {}, reasons: {}, suggestions: {} };
+  }
   const asaDates = schedule
     .filter(d => d.slots.includes('朝運動'))
     .map(d => d.date)
@@ -101,7 +107,7 @@ function assignAsaUndoHorses(schedule, asaUndo, groups) {
     if (participants.length === 0) continue;
 
     const forbidden = [], lowPriority = [], normal = [];
-    for (const h of ASA_UNDO_HORSES) {
+    for (const h of horseList) {
       const gap = lastUsed[h] ? daysBetween(lastUsed[h], date) : 99;
       if (gap <= 1) forbidden.push(h);
       else if (gap === 2) lowPriority.push(h);
@@ -143,7 +149,7 @@ function assignAsaUndoHorses(schedule, asaUndo, groups) {
       const fmtDate = (d) => { const [, m, day] = d.split('-'); return `${+m}/${+day}`; };
       const gradeWeight = (n) => gradeOf(n, groups) === 'first' ? 2 : 1;
       const suggestionList = [];
-      for (const h of ASA_UNDO_HORSES) {
+      for (const h of horseList) {
         if (h === chosen) continue;
         const hScore = conflictScore(h);
         const gap = lastUsed[h] ? daysBetween(lastUsed[h], date) : 99;
@@ -343,6 +349,10 @@ function AdminHome() {
   const [newName, setNewName] = useState('');
   const [newGrade, setNewGrade] = useState('first');
 
+  // 朝運動の馬リスト（既定値 = ASA_UNDO_HORSES、保存済みがあれば上書き）
+  const [asaHorses, setAsaHorses] = useState(() => ASA_UNDO_HORSES.map(n => ({ name: n, active: true })));
+  const [newHorse, setNewHorse] = useState('');
+
   const loadSurveys = useCallback(async () => {
     try {
       const { surveys } = await api.listSurveys();
@@ -369,8 +379,15 @@ function AdminHome() {
     } catch (e) { console.error(e); }
   }, []);
 
-  useEffect(() => { loadSurveys(); loadGroups(); loadWeeklySlots(); },
-    [loadSurveys, loadGroups, loadWeeklySlots]);
+  const loadAsaHorses = useCallback(async () => {
+    try {
+      const { horses } = await api.getAsaUndoHorses();
+      if (Array.isArray(horses) && horses.length > 0) setAsaHorses(horses);
+    } catch (e) { console.error(e); }
+  }, []);
+
+  useEffect(() => { loadSurveys(); loadGroups(); loadWeeklySlots(); loadAsaHorses(); },
+    [loadSurveys, loadGroups, loadWeeklySlots, loadAsaHorses]);
 
   // #3: エラー時に前の状態にロールバック
   const saveGroups = async (next, prev) => {
@@ -413,6 +430,44 @@ function AdminHome() {
     const next = normalizeWeeklySlots({ ...prev, [dow]: [] });
     setWeeklySlots(next);
     await saveWeeklySlots(next, prev, dowMode);
+  };
+
+  const saveAsaHorses = async (next, prev) => {
+    setSaving(true);
+    try {
+      await api.updateAsaUndoHorses(next);
+    } catch (e) {
+      setAsaHorses(prev);
+      alert('保存失敗: ' + e.message);
+    } finally { setSaving(false); }
+  };
+
+  const toggleHorseActive = async (name) => {
+    const prev = asaHorses;
+    const next = prev.map(h => (h.name === name ? { ...h, active: !h.active } : h));
+    setAsaHorses(next);
+    await saveAsaHorses(next, prev);
+  };
+
+  const addHorse = async () => {
+    const name = newHorse.trim();
+    if (!name) return;
+    if (asaHorses.some(h => h.name === name)) { alert(`「${name}」はすでに登録されています`); return; }
+    if (asaHorses.length >= 20) { alert('馬は20頭まで登録できます'); return; }
+    const prev = asaHorses;
+    const next = [...prev, { name, active: true }];
+    setAsaHorses(next);
+    setNewHorse('');
+    await saveAsaHorses(next, prev);
+  };
+
+  const removeHorse = async (name) => {
+    if (!confirm(`「${name}」を馬リストから削除しますか？
+（すでに割り当て済みの日の馬名は残ります）`)) return;
+    const prev = asaHorses;
+    const next = prev.filter(h => h.name !== name);
+    setAsaHorses(next);
+    await saveAsaHorses(next, prev);
   };
 
   const createSurvey = async () => {
@@ -654,6 +709,65 @@ function AdminHome() {
             </div>
 
             <div style={CARD}>
+              <div style={{ fontWeight: 700, marginBottom: 6 }}>🐴 朝運動の馬</div>
+              <div style={{ fontSize: 12, color: '#64748b', marginBottom: 14 }}>
+                チェックを外した馬は自動配置の対象外になります（日付ごとの手動選択では引き続き選べます）。
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {asaHorses.length === 0 && (
+                  <div style={{ color: '#f87171', fontSize: 13, padding: '4px 2px' }}>
+                    馬が登録されていません。1頭以上追加してください。
+                  </div>
+                )}
+                {asaHorses.map(h => (
+                  <div key={h.name} style={{
+                    padding: '8px 14px', background: '#0f1117', borderRadius: 8,
+                    display: 'flex', alignItems: 'center', gap: 10,
+                  }}>
+                    <label style={{
+                      display: 'flex', alignItems: 'center', gap: 6, fontSize: 13,
+                      cursor: saving ? 'default' : 'pointer',
+                      color: h.active ? '#e2e8f0' : '#64748b',
+                    }}>
+                      <input
+                        type="checkbox"
+                        checked={h.active}
+                        disabled={saving}
+                        onChange={() => toggleHorseActive(h.name)}
+                      />
+                      使用可
+                    </label>
+                    <span style={{ fontWeight: 700, color: h.active ? '#e2e8f0' : '#64748b' }}>
+                      {h.name}
+                    </span>
+                    <button onClick={() => removeHorse(h.name)} disabled={saving} style={{
+                      marginLeft: 'auto', padding: '3px 10px', fontSize: 11, border: 'none',
+                      borderRadius: 6, background: '#3b1f1f', color: '#f87171',
+                      cursor: saving ? 'default' : 'pointer', opacity: saving ? 0.5 : 1,
+                    }}>削除</button>
+                  </div>
+                ))}
+              </div>
+              <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                <input
+                  value={newHorse}
+                  onChange={e => setNewHorse(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') addHorse(); }}
+                  maxLength={20}
+                  placeholder="馬名を追加"
+                  style={{ ...INPUT, flex: 1, maxWidth: 200 }}
+                />
+                <button onClick={addHorse} disabled={saving || !newHorse.trim()} style={{
+                  ...BTN_SUCCESS, padding: '6px 16px', fontSize: 13,
+                  opacity: saving || !newHorse.trim() ? 0.5 : 1,
+                }}>➕ 追加</button>
+              </div>
+              <div style={{ fontSize: 12, color: '#64748b', marginTop: 12 }}>
+                ※ ここでの設定は既定値です。特定の月だけ変える場合は、その調査の「🌅 朝運動記録」で上書きできます
+              </div>
+            </div>
+
+            <div style={CARD}>
               <div style={{ fontWeight: 700, marginBottom: 16 }}>🔑 管理者PIN変更</div>
               <div style={{ fontSize: 13, color: '#94a3b8', marginBottom: 12 }}>
                 新しいPIN（4〜8桁の数字）
@@ -780,6 +894,10 @@ function AdminDetail({ surveyId }) {
   const [assignSuggestions, setAssignSuggestions] = useState({});
   const [gozenAssign, setGozenAssign] = useState({});
   const [horseNameSuggestions, setHorseNameSuggestions] = useState([]);
+  // 朝運動の馬: 共通リストと、この調査で使う馬（未設定なら共通の active を使う）
+  const [asaHorses, setAsaHorses] = useState(() => ASA_UNDO_HORSES.map(n => ({ name: n, active: true })));
+  const [enabledHorses, setEnabledHorses] = useState(null);
+  const [horsesLoaded, setHorsesLoaded] = useState('loading'); // 'loading' | 'ok' | 'failed'
 
   const load = useCallback(async () => {
     try {
@@ -790,6 +908,16 @@ function AdminDetail({ surveyId }) {
       setAsaUndoHorse(survey.asaUndoHorse || {});
       setGozenAssign(survey.gozenAssign || {});
       api.getHorseNames().then(r => setHorseNameSuggestions(r.names || [])).catch(() => {});
+      api.getAsaUndoHorses()
+        .then(r => {
+          const roster = (Array.isArray(r.horses) && r.horses.length > 0)
+            ? r.horses
+            : ASA_UNDO_HORSES.map(n => ({ name: n, active: true }));
+          setAsaHorses(roster);
+          setEnabledHorses(survey.asaUndoHorseEnabled ?? roster.filter(h => h.active).map(h => h.name));
+          setHorsesLoaded('ok');
+        })
+        .catch((err) => { console.error('馬リスト取得失敗:', err.message); setHorsesLoaded('failed'); });
     } catch (e) {
       if (e.status === 404) setSurvey(null);
       else console.error(e);
@@ -856,9 +984,23 @@ function AdminDetail({ surveyId }) {
   const submitted = allMembers.filter(m => responses[m.name]);
   const pending = allMembers.filter(m => !responses[m.name]);
   const remainDays = daysUntil(survey.deadline);
+  const horseRoster = asaHorses.map(h => h.name);
+  // この月に使う馬（共通リストから削除された馬は除く）
+  const usableHorses = (enabledHorses ?? asaHorses.filter(h => h.active).map(h => h.name))
+    .filter(n => horseRoster.includes(n));
+
+  const toggleEnabledHorse = async (name) => {
+    const prev = usableHorses;
+    const next = prev.includes(name) ? prev.filter(n => n !== name) : [...prev, name];
+    setEnabledHorses(next);
+    try { await api.updateAsaUndoHorseEnabled(surveyId, next); }
+    catch (e) { setEnabledHorses(prev); alert('保存失敗: ' + e.message); }
+  };
 
   const autoAssignAsaUndoHorses = async () => {
-    const { assignments: newAssign, reasons, suggestions } = assignAsaUndoHorses(survey.schedule, asaUndo, survey.groups);
+    if (horsesLoaded !== 'ok' || usableHorses.length === 0) return;
+    const { assignments: newAssign, reasons, suggestions } =
+      assignAsaUndoHorses(survey.schedule, asaUndo, survey.groups, usableHorses);
     setAsaUndoHorse(newAssign);
     setAssignReasons(reasons);
     setAssignSuggestions(suggestions);
@@ -1031,14 +1173,58 @@ function AdminDetail({ surveyId }) {
             <div style={{ fontWeight: 700 }}>🌅 朝運動記録</div>
             <button
               onClick={autoAssignAsaUndoHorses}
+              disabled={horsesLoaded !== 'ok' || usableHorses.length === 0}
               style={{
                 marginLeft: 'auto', padding: '4px 14px', fontSize: 12,
                 background: '#1e3a5f', color: '#93c5fd',
-                border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600,
+                border: 'none', borderRadius: 6, fontWeight: 600,
+                cursor: (horsesLoaded !== 'ok' || usableHorses.length === 0) ? 'not-allowed' : 'pointer',
+                opacity: (horsesLoaded !== 'ok' || usableHorses.length === 0) ? 0.5 : 1,
               }}>🐴 馬を自動配置</button>
           </div>
           <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10 }}>
             参加した人をクリックして記録。馬名は自動配置後にドロップダウンで調整できます。
+          </div>
+
+          <div style={{ padding: '10px 14px', background: '#0f1117', borderRadius: 8, marginBottom: 12 }}>
+            <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 8 }}>
+              この月に使う馬（自動配置の対象）
+            </div>
+            {horsesLoaded === 'loading' && (
+              <div style={{ fontSize: 12, color: '#64748b' }}>読み込み中...</div>
+            )}
+            {horsesLoaded === 'failed' && (
+              <div style={{ fontSize: 12, color: '#f87171' }}>
+                ⚠ 馬リストを読み込めませんでした。ページを再読み込みしてください（自動配置は無効にしています）
+              </div>
+            )}
+            {horsesLoaded === 'ok' && (
+              <>
+                <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+                  {horseRoster.map(n => (
+                    <label key={n} style={{
+                      display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, cursor: 'pointer',
+                      color: usableHorses.includes(n) ? '#e2e8f0' : '#64748b',
+                    }}>
+                      <input
+                        type="checkbox"
+                        checked={usableHorses.includes(n)}
+                        onChange={() => toggleEnabledHorse(n)}
+                      />
+                      {n}
+                    </label>
+                  ))}
+                </div>
+                {usableHorses.length === 0 && (
+                  <div style={{ fontSize: 12, color: '#f87171', marginTop: 8 }}>
+                    ⚠ 使用可能な馬が選ばれていません。1頭以上チェックしてください
+                  </div>
+                )}
+                <div style={{ fontSize: 11, color: '#64748b', marginTop: 8 }}>
+                  ※ 既定は設定タブの「🐴 朝運動の馬」。ここでの変更はこの調査にだけ反映されます
+                </div>
+              </>
+            )}
           </div>
           {survey.schedule.filter(day => day.slots.includes('朝運動')).map(day => {
             const attending = asaUndo[day.date] || [];
@@ -1062,7 +1248,14 @@ function AdminDetail({ surveyId }) {
                       width: 90, border: '1px solid #334155',
                     }}>
                     <option value="">馬名--</option>
-                    {ASA_UNDO_HORSES.map(h => <option key={h} value={h}>{h}</option>)}
+                    {(selectedHorse && !horseRoster.includes(selectedHorse)
+                      ? [...horseRoster, selectedHorse]
+                      : horseRoster
+                    ).map(h => (
+                      <option key={h} value={h}>
+                        {usableHorses.includes(h) ? h : `${h} ⚠`}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 {reason && (

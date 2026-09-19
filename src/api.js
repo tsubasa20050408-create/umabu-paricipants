@@ -65,6 +65,15 @@ export const api = {
   updateWeeklySlots: (weeklySlots) =>
     call('/api/survey', { method: 'POST', auth: true, body: { action: 'updateWeeklySlots', weeklySlots } }),
 
+  getAsaUndoHorses: () =>
+    call('/api/survey?resource=asaUndoHorses', { auth: true }),
+
+  updateAsaUndoHorses: (horses) =>
+    call('/api/survey', { method: 'POST', auth: true, body: { action: 'updateAsaUndoHorses', horses } }),
+
+  updateAsaUndoHorseEnabled: (id, names) =>
+    call('/api/survey', { method: 'POST', auth: true, body: { action: 'updateAsaUndoHorseEnabled', id, names } }),
+
   updateHorses: (id, horses) =>
     call('/api/survey', { method: 'POST', auth: true, body: { action: 'updateHorses', id, horses } }),
 
