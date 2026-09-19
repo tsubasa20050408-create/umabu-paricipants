@@ -45,6 +45,18 @@ Deployments タブ → Redeploy
 2. 学年→自分の名前を選択（3年→2年→1年順）
 3. 参加できる時限にチェック → 「送信」
 
+## デザイン
+
+配色・タイポグラフィ・角丸・余白は `src/theme.js` に集約（`C` 色 / `FONT` / `R` 角丸 / `S` 余白 / `T` タイポ）。
+**コンポーネント側で hex を直接書かない**こと。
+
+- クリームの地（`#f5f0e8`）にカード（`#faf9f5` + 1px 罫線）。影とグラデーションは使わない
+- アクセントはコーラル `#cc785c` のみ。主要ボタン（作成・送信・Excel出力）に限定して使う
+- 見出しはセリフ（Cormorant Garamond + Noto Serif JP）、本文は Inter + Noto Sans JP。
+  フォントは `index.html` の Google Fonts から読み込む
+- ダーク面（`#181715`）は**ヘッダー帯と Excel 出力の CTA 帯の2箇所だけ**
+- 学年色: 3年=コーラル / 2年=アンバー / 1年=ティール（`src/schedule.js` の `GRADE_COLOR`）
+
 ## ローカル開発
 ```
 npm install

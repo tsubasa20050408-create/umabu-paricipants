@@ -1,7 +1,20 @@
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; }
 body {
-  font-family: 'Noto Sans JP', -apple-system, BlinkMacSystemFont, sans-serif;
-  background: #0f1117;
-  color: #e2e8f0;
+  font-family: Inter, 'Noto Sans JP', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: #f5f0e8;
+  color: #3d3d3a;
+  -webkit-font-smoothing: antialiased;
 }
+button, input, select, textarea { font-family: inherit; }
+input[type="checkbox"], input[type="radio"], select { accent-color: #cc785c; }
+input:focus, select:focus, textarea:focus {
+  border-color: #cc785c;
+  box-shadow: 0 0 0 3px rgba(204, 120, 92, 0.15);
+  outline: none;
+}
+button:focus-visible, a:focus-visible {
+  outline: 2px solid #cc785c;
+  outline-offset: 2px;
+}
+::selection { background: rgba(204, 120, 92, 0.2); }

@@ -62,7 +62,8 @@ export const INITIAL_GROUPS = {
 
 export const GRADE_LABEL = { third: '3年', second: '2年', first: '1年' };
 export const GRADE_ORDER = ['third', 'second', 'first'];
-export const GRADE_COLOR = { third: '#c084fc', second: '#60a5fa', first: '#34d399' };
+// 学年色（theme.js の C.primary / C.amber / C.teal と対応。循環 import を避けるため hex 直書き）
+export const GRADE_COLOR = { third: '#cc785c', second: '#e8a55a', first: '#5db8a6' };
 
 // 月のスケジュール生成: [{ date: 'YYYY-MM-DD', day: 1-31, dow: 0-6, slots: [...] }]
 export function buildMonthSchedule(year, month, weeklySlots = WEEKLY_SLOTS) {

@@ -7,6 +7,7 @@ import {
   normalizeWeeklySlots, slotModeOf,
 } from './schedule.js';
 import { exportPracticeXlsx } from './export.js';
+import { C, FONT, R, S, T } from './theme.js';
 
 // ─── URL ルーティング ──────────────────────────────────────────
 function useHashRoute() {
@@ -21,24 +22,24 @@ function useHashRoute() {
   return { kind: 'home' };
 }
 
-const PAGE = {
-  fontFamily: "'Noto Sans JP', sans-serif",
-  background: '#0f1117', minHeight: '100vh', color: '#e2e8f0',
-};
-const CARD = { background: '#1e293b', borderRadius: 12, padding: 20, marginBottom: 16 };
+const PAGE = { fontFamily: FONT.sans, background: C.surfaceSoft, minHeight: '100vh', color: C.body };
+const CARD = { background: C.canvas, border: `1px solid ${C.hairline}`, borderRadius: R.lg, padding: S.lg, marginBottom: S.md };
+const INSET = { background: C.surfaceSoft, borderRadius: R.md };
 const INPUT = {
-  background: '#0f1117', border: '1px solid #334155', borderRadius: 8,
-  color: '#f8fafc', padding: '6px 12px', fontSize: 14, outline: 'none',
+  background: C.canvas, border: `1px solid ${C.hairline}`, borderRadius: R.md,
+  color: C.ink, padding: '10px 14px', fontSize: 14, fontFamily: FONT.sans, outline: 'none',
 };
 const BTN_PRIMARY = {
-  padding: '8px 20px', background: 'linear-gradient(135deg,#6366f1,#8b5cf6)',
-  border: 'none', borderRadius: 10, color: '#fff', fontWeight: 700, fontSize: 14,
-  cursor: 'pointer', boxShadow: '0 4px 15px rgba(99,102,241,0.4)',
+  padding: '11px 20px', background: C.primary, border: 'none', borderRadius: R.md,
+  color: C.onPrimary, fontWeight: 500, fontSize: 14, fontFamily: FONT.sans, cursor: 'pointer',
 };
-const BTN_SUCCESS = {
-  padding: '8px 18px', background: 'linear-gradient(135deg,#059669,#047857)',
-  border: 'none', borderRadius: 10, color: '#fff', fontWeight: 700, fontSize: 14,
-  cursor: 'pointer',
+const BTN_SECONDARY = {
+  padding: '10px 18px', background: C.canvas, border: `1px solid ${C.hairline}`, borderRadius: R.md,
+  color: C.ink, fontWeight: 500, fontSize: 14, fontFamily: FONT.sans, cursor: 'pointer',
+};
+const BTN_DANGER = {
+  padding: '4px 12px', background: 'transparent', border: `1px solid ${C.hairline}`, borderRadius: R.sm,
+  color: C.error, fontSize: 12, fontFamily: FONT.sans, cursor: 'pointer',
 };
 
 // 締切日までの残り日数
@@ -251,62 +252,68 @@ function PinLock({ onUnlock }) {
     }
   }, [pin]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const dotColor = shake ? '#fc8181' : '#fff';
+  const dotFilled = shake ? C.error : C.primary;
 
   return (
     <div style={{
       ...PAGE, display: 'flex', flexDirection: 'column',
       alignItems: 'center', justifyContent: 'center',
-      background: 'linear-gradient(160deg,#1e293b,#0f172a)',
     }}>
-      <div style={{ fontSize: 50, marginBottom: 12 }}>🔒</div>
-      <div style={{ fontSize: 20, fontWeight: 800, marginBottom: 6 }}>管理者ログイン</div>
-      <div style={{ color: '#94a3b8', fontSize: 13, marginBottom: 24 }}>PIN を入力してください</div>
-
       <div style={{
-        display: 'flex', gap: 14, marginBottom: 24, justifyContent: 'center',
-        transition: 'transform 0.1s',
-        transform: shake ? 'translateX(8px)' : 'none',
+        ...CARD, display: 'flex', flexDirection: 'column', alignItems: 'center',
+        padding: S.xl, width: 340,
       }}>
-        {Array.from({ length: Math.max(4, pin.length) }).map((_, i) => (
-          <div key={i} style={{
-            width: 14, height: 14, borderRadius: '50%',
-            border: `2px solid ${i < pin.length ? dotColor : 'rgba(255,255,255,0.4)'}`,
-            background: i < pin.length ? dotColor : 'transparent',
-            transition: 'background 0.1s',
-          }} />
-        ))}
-      </div>
+        <div style={{ fontSize: 44, marginBottom: S.xs }}>🔒</div>
+        <div style={{ ...T.pageTitle, color: C.ink, marginBottom: S.xxs }}>管理者ログイン</div>
+        <div style={{ ...T.caption, color: C.muted, marginBottom: S.lg }}>PIN を入力してください</div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,72px)', gap: 12 }}>
-        {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => (
-          <button key={n} onClick={() => press(String(n))} disabled={loading} style={{
+        <div style={{
+          display: 'flex', gap: 14, marginBottom: S.lg, justifyContent: 'center',
+          transition: 'transform 0.1s',
+          transform: shake ? 'translateX(8px)' : 'none',
+        }}>
+          {Array.from({ length: Math.max(4, pin.length) }).map((_, i) => (
+            <div key={i} style={{
+              width: 14, height: 14, borderRadius: '50%',
+              border: `2px solid ${i < pin.length ? dotFilled : C.hairline}`,
+              background: i < pin.length ? dotFilled : 'transparent',
+              transition: 'background 0.1s',
+            }} />
+          ))}
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,72px)', gap: 12 }}>
+          {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => (
+            <button key={n} onClick={() => press(String(n))} disabled={loading} style={{
+              width: 72, height: 72, borderRadius: '50%',
+              border: `1px solid ${C.hairline}`,
+              background: C.canvas, color: C.ink,
+              fontSize: 22, fontWeight: 600, fontFamily: FONT.sans, cursor: 'pointer',
+            }}>{n}</button>
+          ))}
+          <button onClick={() => submit(pin)} disabled={!pin || loading} style={{
             width: 72, height: 72, borderRadius: '50%',
-            border: '1px solid rgba(255,255,255,0.2)',
-            background: 'rgba(255,255,255,0.08)', color: '#fff',
-            fontSize: 22, fontWeight: 600, cursor: 'pointer',
-          }}>{n}</button>
-        ))}
-        <button onClick={() => submit(pin)} disabled={!pin || loading} style={{
-          width: 72, height: 72, borderRadius: '50%',
-          border: '1px solid rgba(99,102,241,0.4)',
-          background: 'rgba(99,102,241,0.25)', color: '#a5b4fc',
-          fontSize: 18, fontWeight: 700, cursor: 'pointer',
-        }}>OK</button>
-        <button onClick={() => press('0')} disabled={loading} style={{
-          width: 72, height: 72, borderRadius: '50%',
-          border: '1px solid rgba(255,255,255,0.2)',
-          background: 'rgba(255,255,255,0.08)', color: '#fff',
-          fontSize: 22, fontWeight: 600, cursor: 'pointer',
-        }}>0</button>
-        <button onClick={back} disabled={loading} style={{
-          width: 72, height: 72, borderRadius: '50%',
-          border: '1px solid rgba(255,255,255,0.2)',
-          background: 'rgba(255,255,255,0.08)', color: '#fff',
-          fontSize: 18, fontWeight: 600, cursor: 'pointer',
-        }}>⌫</button>
+            border: 'none',
+            background: (!pin || loading) ? C.primaryDisabled : C.primary,
+            color: (!pin || loading) ? C.muted : C.onPrimary,
+            fontSize: 16, fontWeight: 600, fontFamily: FONT.sans,
+            cursor: (!pin || loading) ? 'not-allowed' : 'pointer',
+          }}>OK</button>
+          <button onClick={() => press('0')} disabled={loading} style={{
+            width: 72, height: 72, borderRadius: '50%',
+            border: `1px solid ${C.hairline}`,
+            background: C.canvas, color: C.ink,
+            fontSize: 22, fontWeight: 600, fontFamily: FONT.sans, cursor: 'pointer',
+          }}>0</button>
+          <button onClick={back} disabled={loading} style={{
+            width: 72, height: 72, borderRadius: '50%',
+            border: `1px solid ${C.hairline}`,
+            background: C.canvas, color: C.ink,
+            fontSize: 18, fontWeight: 600, fontFamily: FONT.sans, cursor: 'pointer',
+          }}>⌫</button>
+        </div>
+        <div style={{ ...T.caption, color: C.error, marginTop: S.md, fontWeight: 600, height: 20 }}>{err}</div>
       </div>
-      <div style={{ color: '#fc8181', fontSize: 13, marginTop: 18, fontWeight: 600, height: 20 }}>{err}</div>
     </div>
   );
 }
@@ -561,24 +568,28 @@ function AdminHome() {
   const logout = () => { tokenStore.clear(); window.location.reload(); };
 
   const tabStyle = (key) => ({
-    padding: '7px 18px', borderRadius: 8, border: 'none', cursor: 'pointer',
-    fontSize: 13, fontWeight: 700,
-    background: tab === key ? '#6366f1' : '#1e293b',
-    color: tab === key ? '#fff' : '#94a3b8',
+    padding: '8px 14px', borderRadius: R.md, border: 'none', cursor: 'pointer',
+    fontSize: 13, fontWeight: 500, fontFamily: FONT.sans,
+    background: tab === key ? C.surfaceCard : 'transparent',
+    color: tab === key ? C.ink : C.muted,
   });
 
   return (
     <div style={PAGE}>
-      <div style={{ maxWidth: 720, margin: '0 auto', padding: 24 }}>
-        <div style={{ display: 'flex', alignItems: 'center', marginBottom: 20 }}>
-          <h1 style={{ fontSize: 22, fontWeight: 800, margin: 0 }}>🐴 練習参加者把握ツール</h1>
+      <div style={{ background: C.surfaceDark }}>
+        <div style={{
+          maxWidth: 720, margin: '0 auto', padding: `${S.lg}px ${S.lg}px`,
+          display: 'flex', alignItems: 'center',
+        }}>
+          <h1 style={{ ...T.pageTitle, color: C.onDark, margin: 0 }}>🐴 練習参加者把握ツール</h1>
           <button onClick={logout} style={{
-            marginLeft: 'auto', padding: '4px 12px', fontSize: 12,
-            background: '#1e293b', color: '#94a3b8', border: '1px solid #334155',
-            borderRadius: 6, cursor: 'pointer',
+            marginLeft: 'auto', padding: '6px 14px', fontSize: 12, fontFamily: FONT.sans,
+            background: C.surfaceDarkElevated, color: C.onDark, border: 'none',
+            borderRadius: R.md, cursor: 'pointer',
           }}>ログアウト</button>
         </div>
-
+      </div>
+      <div style={{ maxWidth: 720, margin: '0 auto', padding: 24 }}>
         <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
           <button style={tabStyle('survey')} onClick={() => setTab('survey')}>📅 調査</button>
           <button style={tabStyle('staff')} onClick={() => setTab('staff')}>👥 スタッフ</button>
@@ -589,7 +600,7 @@ function AdminHome() {
         {tab === 'survey' && (
           <>
             <div style={CARD}>
-              <div style={{ fontWeight: 700, marginBottom: 14 }}>新規調査を作成</div>
+              <div style={{ ...T.cardTitle, color: C.ink, marginBottom: 14 }}>新規調査を作成</div>
               <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
                 <input type="number" value={year} onChange={e => setYear(+e.target.value)}
                   style={{ ...INPUT, width: 90 }} />
@@ -599,18 +610,23 @@ function AdminHome() {
                 <span>月</span>
               </div>
               <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 14 }}>
-                <span style={{ fontSize: 13, color: '#94a3b8' }}>締切日</span>
+                <span style={{ ...T.body, color: C.muted }}>締切日</span>
                 <input type="date" value={deadline} onChange={e => setDeadline(e.target.value)}
-                  style={{ ...INPUT, colorScheme: 'dark' }} />
+                  style={INPUT} />
               </div>
-              <button onClick={createSurvey} disabled={creating || weeklyLoaded !== 'ok'} style={BTN_PRIMARY}>
+              <button onClick={createSurvey} disabled={creating || weeklyLoaded !== 'ok'} style={{
+                ...BTN_PRIMARY,
+                ...(creating || weeklyLoaded !== 'ok'
+                  ? { background: C.primaryDisabled, color: C.muted, cursor: 'not-allowed' }
+                  : {}),
+              }}>
                 {creating ? '作成中...' : '➕ 作成'}
               </button>
-              <div style={{ fontSize: 12, color: '#64748b', marginTop: 10 }}>
+              <div style={{ ...T.caption, color: C.muted, marginTop: 10 }}>
                 ※ 現在のスタッフ名簿（{groups.third.length + groups.second.length + groups.first.length}名）が使われます
               </div>
               {weeklyLoaded === 'ok' && (
-                <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>
+                <div style={{ ...T.caption, color: C.muted, marginTop: 4 }}>
                   ※ 設定タブの練習時限パターンが使われます（
                   {DOW_LABELS.map((label, dow) => {
                     const koma = (weeklySlots[dow] || []).filter(s => s !== '朝運動');
@@ -620,34 +636,31 @@ function AdminHome() {
                 </div>
               )}
               {weeklyLoaded === 'failed' && (
-                <div style={{ fontSize: 12, color: '#f87171', marginTop: 4 }}>
+                <div style={{ ...T.caption, color: C.error, marginTop: 4 }}>
                   ⚠ 時限パターンを読み込めませんでした。ページを再読み込みしてください
                 </div>
               )}
             </div>
 
             <div style={CARD}>
-              <div style={{ fontWeight: 700, marginBottom: 14 }}>既存の調査</div>
+              <div style={{ ...T.cardTitle, color: C.ink, marginBottom: 14 }}>既存の調査</div>
               {loaded && surveys.length === 0 && (
-                <div style={{ color: '#475569', textAlign: 'center', padding: 16 }}>まだありません</div>
+                <div style={{ color: C.mutedSoft, textAlign: 'center', padding: 16 }}>まだありません</div>
               )}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {surveys.map(s => (
                   <div key={s.id} style={{
-                    padding: '10px 14px', background: '#0f1117', borderRadius: 8,
+                    ...INSET, padding: '10px 14px',
                     display: 'flex', alignItems: 'center', gap: 10,
                   }}>
                     <a href={`#/admin/${s.id}`} style={{
-                      flex: 1, textDecoration: 'none', color: '#e2e8f0',
+                      flex: 1, textDecoration: 'none', color: C.ink,
                       display: 'flex', gap: 10, alignItems: 'baseline',
                     }}>
-                      <span style={{ fontWeight: 700 }}>{s.year}年{s.month}月</span>
-                      <span style={{ color: '#64748b', fontSize: 11 }}>{s.id.slice(0, 8)}...</span>
+                      <span style={{ fontWeight: 600 }}>{s.year}年{s.month}月</span>
+                      <span style={{ color: C.muted, fontSize: 11 }}>{s.id.slice(0, 8)}...</span>
                     </a>
-                    <button onClick={() => removeSurvey(s.id)} style={{
-                      padding: '3px 10px', fontSize: 11, border: 'none', borderRadius: 6,
-                      background: '#3b1f1f', color: '#f87171', cursor: 'pointer',
-                    }}>削除</button>
+                    <button onClick={() => removeSurvey(s.id)} style={BTN_DANGER}>削除</button>
                   </div>
                 ))}
               </div>
@@ -659,8 +672,8 @@ function AdminHome() {
         {tab === 'settings' && (
           <>
             <div style={CARD}>
-              <div style={{ fontWeight: 700, marginBottom: 6 }}>🗓 練習時限パターン</div>
-              <div style={{ fontSize: 12, color: '#64748b', marginBottom: 14 }}>
+              <div style={{ ...T.cardTitle, color: C.ink, marginBottom: 6 }}>🗓 練習時限パターン</div>
+              <div style={{ ...T.caption, color: C.muted, marginBottom: 14 }}>
                 曜日ごとの練習時限を設定します。朝運動は全曜日固定です。
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -671,25 +684,25 @@ function AdminHome() {
                   const options = mode === 'gozen' ? GOZEN_SLOTS : KOMA_SLOTS;
                   return (
                     <div key={dow} style={{
-                      padding: '10px 14px', background: '#0f1117', borderRadius: 8,
+                      ...INSET, padding: '10px 14px',
                       display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
                     }}>
-                      <span style={{ fontWeight: 700, width: 16 }}>{label}</span>
+                      <span style={{ fontWeight: 600, color: C.ink, width: 16 }}>{label}</span>
                       <span style={{
-                        fontSize: 11, color: '#64748b', border: '1px solid #334155',
-                        borderRadius: 6, padding: '2px 8px',
+                        fontSize: 11, color: C.muted, border: `1px solid ${C.hairline}`,
+                        borderRadius: R.sm, padding: '2px 8px',
                       }}>朝運動（固定）</span>
 
                       {gozenOk && (
                         <div style={{ display: 'flex', gap: 4 }}>
                           {[['koma', '限で指定'], ['gozen', '午前・午後で指定']].map(([m, mLabel]) => (
                             <button key={m} onClick={() => changeSlotMode(dow, m)} disabled={saving} style={{
-                              padding: '3px 10px', fontSize: 11, borderRadius: 6,
+                              padding: '3px 10px', fontSize: 11, borderRadius: R.sm,
                               cursor: saving ? 'not-allowed' : 'pointer',
                               opacity: saving ? 0.5 : 1,
-                              border: `1px solid ${mode === m ? '#6366f1' : '#334155'}`,
-                              background: mode === m ? '#6366f1' : 'transparent',
-                              color: mode === m ? '#fff' : '#94a3b8',
+                              border: `1px solid ${mode === m ? C.primary : C.hairline}`,
+                              background: mode === m ? C.primary : 'transparent',
+                              color: mode === m ? C.onPrimary : C.muted,
                             }}>{mLabel}</button>
                           ))}
                         </div>
@@ -700,7 +713,7 @@ function AdminHome() {
                           <label key={s} style={{
                             display: 'flex', alignItems: 'center', gap: 4, fontSize: 13,
                             cursor: saving ? 'default' : 'pointer',
-                            color: slots.includes(s) ? '#e2e8f0' : '#64748b',
+                            color: slots.includes(s) ? C.ink : C.muted,
                           }}>
                             <input
                               type="checkbox"
@@ -714,12 +727,12 @@ function AdminHome() {
                       </div>
 
                       {slots.length <= 1 && (
-                        <span style={{ fontSize: 11, color: '#64748b', width: '100%' }}>
+                        <span style={{ fontSize: 11, color: C.muted, width: '100%' }}>
                           時限なし（朝運動のみ）
                         </span>
                       )}
                       {gozenOk && mode === 'gozen' && !slots.includes('午前') && !slots.includes('午後') && (
-                        <span style={{ fontSize: 11, color: '#fbbf24', width: '100%' }}>
+                        <span style={{ fontSize: 11, color: C.warning, width: '100%' }}>
                           ⚠ 午前・午後が未選択です
                         </span>
                       )}
@@ -727,31 +740,31 @@ function AdminHome() {
                   );
                 })}
               </div>
-              <div style={{ fontSize: 12, color: '#64748b', marginTop: 12 }}>
+              <div style={{ ...T.caption, color: C.muted, marginTop: 12 }}>
                 ※ 変更は次に作成する調査から反映されます（作成済みの調査はそのままです）
               </div>
             </div>
 
             <div style={CARD}>
-              <div style={{ fontWeight: 700, marginBottom: 6 }}>🐴 朝運動の馬</div>
-              <div style={{ fontSize: 12, color: '#64748b', marginBottom: 14 }}>
+              <div style={{ ...T.cardTitle, color: C.ink, marginBottom: 6 }}>🐴 朝運動の馬</div>
+              <div style={{ ...T.caption, color: C.muted, marginBottom: 14 }}>
                 チェックを外した馬は自動配置の対象外になります（日付ごとの手動選択では引き続き選べます）。
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {asaHorses.length === 0 && (
-                  <div style={{ color: '#f87171', fontSize: 13, padding: '4px 2px' }}>
+                  <div style={{ color: C.error, fontSize: 13, padding: '4px 2px' }}>
                     馬が登録されていません。1頭以上追加してください。
                   </div>
                 )}
                 {asaHorses.map(h => (
                   <div key={h.name} style={{
-                    padding: '8px 14px', background: '#0f1117', borderRadius: 8,
+                    ...INSET, padding: '8px 14px',
                     display: 'flex', alignItems: 'center', gap: 10,
                   }}>
                     <label style={{
                       display: 'flex', alignItems: 'center', gap: 6, fontSize: 13,
                       cursor: saving ? 'default' : 'pointer',
-                      color: h.active ? '#e2e8f0' : '#64748b',
+                      color: h.active ? C.ink : C.muted,
                     }}>
                       <input
                         type="checkbox"
@@ -761,12 +774,11 @@ function AdminHome() {
                       />
                       使用可
                     </label>
-                    <span style={{ fontWeight: 700, color: h.active ? '#e2e8f0' : '#64748b' }}>
+                    <span style={{ fontWeight: 600, color: h.active ? C.ink : C.muted }}>
                       {h.name}
                     </span>
                     <button onClick={() => removeHorse(h.name)} disabled={saving} style={{
-                      marginLeft: 'auto', padding: '3px 10px', fontSize: 11, border: 'none',
-                      borderRadius: 6, background: '#3b1f1f', color: '#f87171',
+                      ...BTN_DANGER, marginLeft: 'auto',
                       cursor: saving ? 'default' : 'pointer', opacity: saving ? 0.5 : 1,
                     }}>削除</button>
                   </div>
@@ -782,18 +794,20 @@ function AdminHome() {
                   style={{ ...INPUT, flex: 1, maxWidth: 200 }}
                 />
                 <button onClick={addHorse} disabled={saving || !newHorse.trim()} style={{
-                  ...BTN_SUCCESS, padding: '6px 16px', fontSize: 13,
-                  opacity: saving || !newHorse.trim() ? 0.5 : 1,
+                  ...BTN_PRIMARY, padding: '6px 16px', fontSize: 13,
+                  ...(saving || !newHorse.trim()
+                    ? { background: C.primaryDisabled, color: C.muted, cursor: 'not-allowed' }
+                    : {}),
                 }}>➕ 追加</button>
               </div>
-              <div style={{ fontSize: 12, color: '#64748b', marginTop: 12 }}>
+              <div style={{ ...T.caption, color: C.muted, marginTop: 12 }}>
                 ※ ここでの設定は既定値です。特定の月だけ変える場合は、その調査の「🌅 朝運動記録」で上書きできます
               </div>
             </div>
 
             <div style={CARD}>
-              <div style={{ fontWeight: 700, marginBottom: 16 }}>🔑 管理者PIN変更</div>
-              <div style={{ fontSize: 13, color: '#94a3b8', marginBottom: 12 }}>
+              <div style={{ ...T.cardTitle, color: C.ink, marginBottom: 16 }}>🔑 管理者PIN変更</div>
+              <div style={{ ...T.caption, color: C.muted, marginBottom: 12 }}>
                 新しいPIN（4〜8桁の数字）
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxWidth: 280 }}>
@@ -820,15 +834,17 @@ function AdminHome() {
                   disabled={newPin.length < 4 || newPin !== confirmPin}
                   style={{
                     ...BTN_PRIMARY,
-                    opacity: newPin.length < 4 || newPin !== confirmPin ? 0.5 : 1,
+                    ...(newPin.length < 4 || newPin !== confirmPin
+                      ? { background: C.primaryDisabled, color: C.muted, cursor: 'not-allowed' }
+                      : {}),
                   }}
                 >
                   変更する
                 </button>
                 {pinMsg && (
                   <div style={{
-                    fontSize: 13, color: pinMsg.startsWith('変更失敗') ? '#f87171' : '#6ee7b7',
-                    padding: '8px 12px', background: '#0f1117', borderRadius: 8,
+                    ...INSET, fontSize: 13, color: pinMsg.startsWith('変更失敗') ? C.error : C.success,
+                    padding: '8px 12px',
                   }}>
                     {pinMsg}
                   </div>
@@ -843,11 +859,13 @@ function AdminHome() {
           <>
             <div style={CARD}>
               <div style={{ display: 'flex', alignItems: 'center', marginBottom: 14 }}>
-                <div style={{ fontWeight: 700 }}>スタッフ追加</div>
+                <div style={{ ...T.cardTitle, color: C.ink }}>スタッフ追加</div>
                 <button onClick={promoteAll} disabled={saving} style={{
-                  marginLeft: 'auto', padding: '6px 16px', fontSize: 13, fontWeight: 700,
-                  background: 'linear-gradient(135deg,#92400e,#78350f)',
-                  color: '#fcd34d', border: 'none', borderRadius: 8, cursor: 'pointer',
+                  marginLeft: 'auto', padding: '6px 16px', fontSize: 13, fontWeight: 600,
+                  fontFamily: FONT.sans,
+                  background: C.surfaceCreamStrong,
+                  color: C.warning, border: 'none', borderRadius: R.md, cursor: 'pointer',
+                  opacity: saving ? 0.5 : 1,
                 }}>🎓 学年を一斉繰り上げ</button>
               </div>
               <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -860,35 +878,37 @@ function AdminHome() {
                   <option value="second">2年</option>
                   <option value="first">1年</option>
                 </select>
-                <button onClick={addStaff} disabled={saving} style={BTN_PRIMARY}>追加</button>
+                <button onClick={addStaff} disabled={saving} style={{
+                  ...BTN_PRIMARY,
+                  ...(saving ? { background: C.primaryDisabled, color: C.muted, cursor: 'not-allowed' } : {}),
+                }}>追加</button>
               </div>
             </div>
 
-            {[['third', '3年', '#c084fc'], ['second', '2年', '#60a5fa'], ['first', '1年', '#34d399']].map(([key, label, color]) => (
+            {[['third', '3年'], ['second', '2年'], ['first', '1年']].map(([key, label]) => (
               <div key={key} style={CARD}>
-                <div style={{ color, fontWeight: 700, marginBottom: 12, fontSize: 14 }}>
+                <div style={{ color: GRADE_COLOR[key], fontWeight: 600, marginBottom: 12, fontSize: 14 }}>
                   {label}生 ({groups[key].length}名)
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   {groups[key].length === 0 && (
-                    <div style={{ color: '#475569', fontSize: 13, textAlign: 'center', padding: '8px 0' }}>スタッフなし</div>
+                    <div style={{ color: C.mutedSoft, fontSize: 13, textAlign: 'center', padding: '8px 0' }}>スタッフなし</div>
                   )}
                   {groups[key].map(name => (
                     <div key={name} style={{
-                      display: 'flex', alignItems: 'center', gap: 10,
-                      padding: '8px 12px', background: '#0f1117', borderRadius: 8,
+                      ...INSET, display: 'flex', alignItems: 'center', gap: 10,
+                      padding: '8px 12px',
                     }}>
-                      <span style={{ flex: 1, fontWeight: 600 }}>{name}</span>
+                      <span style={{ flex: 1, fontWeight: 600, color: C.ink }}>{name}</span>
                       <button onClick={() => promoteStaff(name)} disabled={saving} style={{
-                        padding: '4px 12px', fontSize: 12, borderRadius: 6, border: 'none', cursor: 'pointer',
-                        background: key === 'third' ? '#451a03' : '#1e3a5f',
-                        color: key === 'third' ? '#fdba74' : '#93c5fd', fontWeight: 600,
+                        ...BTN_SECONDARY, padding: '4px 12px', fontSize: 12, borderRadius: R.sm,
+                        color: key === 'third' ? C.warning : C.ink, fontWeight: 600,
+                        opacity: saving ? 0.5 : 1,
                       }}>
                         {key === 'third' ? '卒業' : key === 'second' ? '→3年に繰上' : '→2年に繰上'}
                       </button>
                       <button onClick={() => removeStaff(name)} disabled={saving} style={{
-                        padding: '4px 12px', fontSize: 12, borderRadius: 6, border: 'none', cursor: 'pointer',
-                        background: '#3b1f1f', color: '#f87171', fontWeight: 600,
+                        ...BTN_DANGER, opacity: saving ? 0.5 : 1,
                       }}>削除</button>
                     </div>
                   ))}
@@ -1000,8 +1020,8 @@ function AdminDetail({ surveyId }) {
     catch (e) { console.error('振り分け保存失敗:', e.message); }
   };
 
-  if (loading) return <div style={PAGE}><div style={{ padding: 40, textAlign: 'center' }}>読み込み中...</div></div>;
-  if (!survey) return <div style={PAGE}><div style={{ padding: 40, textAlign: 'center', color: '#f87171' }}>調査が見つかりません <a href="#" style={{ color: '#93c5fd' }}>戻る</a></div></div>;
+  if (loading) return <div style={PAGE}><div style={{ padding: 40, textAlign: 'center', ...T.body, color: C.muted }}>読み込み中...</div></div>;
+  if (!survey) return <div style={PAGE}><div style={{ padding: 40, textAlign: 'center', ...T.body, color: C.error }}>調査が見つかりません <a href="#" style={{ color: C.primary }}>戻る</a></div></div>;
 
   const allMembers = orderedMembers(survey.groups);
   const responses = survey.responses || {};
@@ -1061,33 +1081,36 @@ function AdminDetail({ surveyId }) {
 
   return (
     <div style={PAGE}>
-      <div style={{ maxWidth: 1000, margin: '0 auto', padding: 24 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
-          <a href="#" style={{ color: '#94a3b8', textDecoration: 'none' }}>← ホーム</a>
-          <h1 style={{ fontSize: 22, fontWeight: 800, margin: 0 }}>
+      <div style={{ background: C.surfaceDark }}>
+        <div style={{
+          maxWidth: 720, margin: '0 auto', padding: `${S.lg}px ${S.lg}px`,
+          display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
+        }}>
+          <a href="#" style={{ ...T.body, color: C.onDarkSoft, textDecoration: 'none' }}>← ホーム</a>
+          <h1 style={{ ...T.sectionTitle, color: C.onDark, margin: 0 }}>
             🐴 {survey.year}年{survey.month}月 練習参加調査
           </h1>
           {survey.deadline && (
             <span style={{
-              fontSize: 12, padding: '3px 10px', borderRadius: 6, fontWeight: 700,
-              background: remainDays !== null && remainDays <= 3 ? '#3b1f1f' : '#1e293b',
-              color: remainDays !== null && remainDays <= 3 ? '#fca5a5' : '#94a3b8',
+              ...T.badge, padding: '3px 10px', borderRadius: R.pill,
+              background: C.surfaceDarkElevated, color: C.onDarkSoft,
             }}>
               締切 {survey.deadline} {remainDays !== null ? `（あと${remainDays}日）` : '（期限切れ）'}
             </span>
           )}
           <button onClick={() => setRefreshAt(Date.now())} style={{
-            marginLeft: 'auto', fontSize: 12, padding: '4px 10px',
-            background: '#1e293b', color: '#94a3b8', border: '1px solid #334155',
-            borderRadius: 6, cursor: 'pointer',
+            marginLeft: 'auto', ...T.badge, padding: '6px 14px',
+            background: C.surfaceDarkElevated, color: C.onDark, border: 'none',
+            borderRadius: R.md, cursor: 'pointer',
           }}>🔄 更新</button>
         </div>
-
+      </div>
+      <div style={{ maxWidth: 1000, margin: '0 auto', padding: 24 }}>
         <div style={CARD}>
-          <div style={{ fontWeight: 700, marginBottom: 10 }}>📩 部員配布リンク</div>
+          <div style={{ ...T.cardTitle, color: C.ink, marginBottom: 10 }}>📩 部員配布リンク</div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             <input readOnly value={memberLink}
-              style={{ ...INPUT, flex: 1, minWidth: 280 }}
+              style={{ ...INPUT, ...T.mono, flex: 1, minWidth: 280 }}
               onFocus={e => e.target.select()} />
             <button onClick={copyLink} style={{ ...BTN_PRIMARY, padding: '6px 16px' }}>
               {copied ? '✓ コピー' : 'コピー'}
@@ -1097,15 +1120,15 @@ function AdminDetail({ surveyId }) {
 
         <div style={CARD}>
           <div style={{ display: 'flex', alignItems: 'center', marginBottom: 12 }}>
-            <div style={{ fontWeight: 700 }}>
+            <div style={{ ...T.cardTitle, color: C.ink }}>
               ✅ 提出状況 {submitted.length} / {allMembers.length}
             </div>
             {pending.length > 0 && (
               <button onClick={() => copyPending(pending)} style={{
-                marginLeft: 'auto', fontSize: 12, padding: '4px 12px',
-                background: copiedPending ? '#064e3b' : '#1e3a5f',
-                color: copiedPending ? '#6ee7b7' : '#93c5fd',
-                border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600,
+                marginLeft: 'auto', ...T.badge, padding: '6px 14px',
+                background: copiedPending ? C.surfaceCard : C.canvas,
+                color: copiedPending ? C.success : C.ink,
+                border: `1px solid ${C.hairline}`, borderRadius: R.md, cursor: 'pointer',
               }}>
                 {copiedPending ? '✓ コピー済み' : `📋 未提出者をコピー（${pending.length}名）`}
               </button>
@@ -1113,7 +1136,7 @@ function AdminDetail({ surveyId }) {
           </div>
           {GRADE_ORDER.map(g => (
             <div key={g} style={{ marginBottom: 12 }}>
-              <div style={{ color: GRADE_COLOR[g], fontWeight: 700, marginBottom: 6, fontSize: 13 }}>
+              <div style={{ ...T.badge, color: GRADE_COLOR[g], marginBottom: 6 }}>
                 {GRADE_LABEL[g]}
               </div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
@@ -1121,11 +1144,17 @@ function AdminDetail({ surveyId }) {
                   const done = !!responses[name];
                   return (
                     <span key={name} style={{
-                      padding: '3px 10px', borderRadius: 6, fontSize: 13,
-                      background: done ? '#064e3b' : '#3b1f1f',
-                      color: done ? '#6ee7b7' : '#fca5a5', fontWeight: 600,
+                      ...T.badge, padding: '4px 12px 4px 10px', borderRadius: R.pill,
+                      background: done ? C.canvas : C.surfaceSoft,
+                      border: done ? `1px solid ${C.hairline}` : 'none',
+                      color: done ? C.ink : C.mutedSoft,
+                      display: 'inline-flex', alignItems: 'center', gap: 6,
                     }}>
-                      {done ? '✓' : '·'} {name}
+                      <span style={{
+                        width: 6, height: 6, borderRadius: '50%',
+                        background: done ? C.success : C.error, display: 'inline-block',
+                      }} />
+                      {name}
                     </span>
                   );
                 })}
@@ -1136,17 +1165,17 @@ function AdminDetail({ surveyId }) {
 
         {submitted.length > 0 && (
           <div style={CARD}>
-            <div style={{ fontWeight: 700, marginBottom: 12 }}>📋 集計・馬名入力</div>
-            <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10 }}>
+            <div style={{ ...T.cardTitle, color: C.ink, marginBottom: 12 }}>📋 集計・馬名入力</div>
+            <div style={{ ...T.caption, color: C.mutedSoft, marginBottom: 10 }}>
               馬名欄はフォーカスを外すと自動保存されます
             </div>
             <datalist id="horse-names-list">
               {horseNameSuggestions.map(n => <option key={n} value={n} />)}
             </datalist>
             <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', ...T.caption }}>
                 <thead>
-                  <tr style={{ color: '#64748b' }}>
+                  <tr style={{ color: C.muted, borderBottom: `1px solid ${C.hairline}` }}>
                     <th style={{ padding: 6, textAlign: 'left' }}>日付</th>
                     <th style={{ padding: 6 }}>曜</th>
                     <th style={{ padding: 6, textAlign: 'left' }}>時限</th>
@@ -1163,13 +1192,13 @@ function AdminDetail({ surveyId }) {
                         .filter(m => responses[m.name]?.slots?.[key])
                         .map(m => m.name);
                       return (
-                        <tr key={key} style={{ borderTop: '1px solid #0f1117' }}>
-                          <td style={{ padding: 5 }}>{i === 0 ? `${survey.month}/${day.day}` : ''}</td>
-                          <td style={{ padding: 5, textAlign: 'center', color: day.dow === 6 ? '#f87171' : day.dow === 5 ? '#60a5fa' : '#94a3b8' }}>
+                        <tr key={key} style={{ borderTop: `1px solid ${C.hairlineSoft}` }}>
+                          <td style={{ padding: 5, color: C.ink }}>{i === 0 ? `${survey.month}/${day.day}` : ''}</td>
+                          <td style={{ padding: 5, textAlign: 'center', color: day.dow === 6 ? C.error : day.dow === 5 ? C.teal : C.muted }}>
                             {i === 0 ? DOW_LABELS[day.dow] : ''}
                           </td>
-                          <td style={{ padding: 5, color: '#fbbf24' }}>{slot}</td>
-                          <td style={{ padding: 5 }}>{attendees.join('、') || <span style={{ color: '#334155' }}>—</span>}</td>
+                          <td style={{ padding: 5, color: C.ink }}>{slot}</td>
+                          <td style={{ padding: 5, color: C.ink }}>{attendees.join('、') || <span style={{ color: C.mutedSoft }}>—</span>}</td>
                           <td style={{ padding: 5 }}>
                             <input
                               defaultValue={horses[key] || ''}
@@ -1177,8 +1206,7 @@ function AdminDetail({ surveyId }) {
                               placeholder="馬名を入力"
                               list="horse-names-list"
                               style={{
-                                ...INPUT, fontSize: 12, padding: '3px 8px',
-                                width: 140, border: '1px solid #334155',
+                                ...INPUT, fontSize: 12, padding: '3px 8px', width: 140,
                               }}
                             />
                           </td>
@@ -1194,31 +1222,29 @@ function AdminDetail({ surveyId }) {
 
         <div style={CARD}>
           <div style={{ display: 'flex', alignItems: 'center', marginBottom: 12 }}>
-            <div style={{ fontWeight: 700 }}>🌅 朝運動記録</div>
+            <div style={{ ...T.cardTitle, color: C.ink }}>🌅 朝運動記録</div>
             <button
               onClick={autoAssignAsaUndoHorses}
               disabled={horsesLoaded !== 'ok' || usableHorses.length === 0}
               style={{
-                marginLeft: 'auto', padding: '4px 14px', fontSize: 12,
-                background: '#1e3a5f', color: '#93c5fd',
-                border: 'none', borderRadius: 6, fontWeight: 600,
-                cursor: (horsesLoaded !== 'ok' || usableHorses.length === 0) ? 'not-allowed' : 'pointer',
-                opacity: (horsesLoaded !== 'ok' || usableHorses.length === 0) ? 0.5 : 1,
+                ...BTN_SECONDARY, marginLeft: 'auto', padding: '6px 14px', fontSize: 12,
+                ...((horsesLoaded !== 'ok' || usableHorses.length === 0)
+                  ? { opacity: 0.5, cursor: 'not-allowed' } : {}),
               }}>🐴 馬を自動配置</button>
           </div>
-          <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10 }}>
+          <div style={{ ...T.caption, color: C.mutedSoft, marginBottom: 10 }}>
             参加した人をクリックして記録。馬名は自動配置後にドロップダウンで調整できます。
           </div>
 
-          <div style={{ padding: '10px 14px', background: '#0f1117', borderRadius: 8, marginBottom: 12 }}>
-            <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 8 }}>
+          <div style={{ ...INSET, padding: '10px 14px', marginBottom: 12 }}>
+            <div style={{ ...T.caption, color: C.muted, marginBottom: 8 }}>
               この月に使う馬（自動配置の対象）
             </div>
             {horsesLoaded === 'loading' && (
-              <div style={{ fontSize: 12, color: '#64748b' }}>読み込み中...</div>
+              <div style={{ ...T.caption, color: C.mutedSoft }}>読み込み中...</div>
             )}
             {horsesLoaded === 'failed' && (
-              <div style={{ fontSize: 12, color: '#f87171' }}>
+              <div style={{ ...T.caption, color: C.error }}>
                 ⚠ 馬リストを読み込めませんでした。ページを再読み込みしてください（自動配置は無効にしています）
               </div>
             )}
@@ -1228,7 +1254,7 @@ function AdminDetail({ surveyId }) {
                   {horseRoster.map(n => (
                     <label key={n} style={{
                       display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, cursor: 'pointer',
-                      color: usableHorses.includes(n) ? '#e2e8f0' : '#64748b',
+                      color: usableHorses.includes(n) ? C.ink : C.mutedSoft,
                     }}>
                       <input
                         type="checkbox"
@@ -1240,11 +1266,11 @@ function AdminDetail({ surveyId }) {
                   ))}
                 </div>
                 {usableHorses.length === 0 && (
-                  <div style={{ fontSize: 12, color: '#f87171', marginTop: 8 }}>
+                  <div style={{ ...T.caption, color: C.error, marginTop: 8 }}>
                     ⚠ 使用可能な馬が選ばれていません。1頭以上チェックしてください
                   </div>
                 )}
-                <div style={{ fontSize: 11, color: '#64748b', marginTop: 8 }}>
+                <div style={{ ...T.caption, color: C.mutedSoft, marginTop: 8 }}>
                   ※ 既定は設定タブの「🐴 朝運動の馬」。ここでの変更はこの調査にだけ反映されます
                 </div>
               </>
@@ -1256,11 +1282,11 @@ function AdminDetail({ surveyId }) {
             const reason = assignReasons[day.date];
             const suggestion = assignSuggestions[day.date];
             return (
-              <div key={day.date} style={{ marginBottom: 10, paddingBottom: 10, borderBottom: '1px solid #0f1117' }}>
+              <div key={day.date} style={{ marginBottom: 10, paddingBottom: 10, borderBottom: `1px solid ${C.hairlineSoft}` }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
                   <span style={{
-                    fontWeight: 700, fontSize: 12,
-                    color: day.dow === 6 ? '#f87171' : day.dow === 5 ? '#60a5fa' : '#94a3b8',
+                    ...T.badge,
+                    color: day.dow === 6 ? C.error : day.dow === 5 ? C.teal : C.muted,
                   }}>
                     {survey.month}/{day.day}（{DOW_LABELS[day.dow]}）
                   </span>
@@ -1268,8 +1294,7 @@ function AdminDetail({ surveyId }) {
                     value={selectedHorse}
                     onChange={e => saveAsaUndoHorse(day.date, e.target.value)}
                     style={{
-                      ...INPUT, fontSize: 12, padding: '2px 6px',
-                      width: 90, border: '1px solid #334155',
+                      ...INPUT, fontSize: 12, padding: '2px 6px', width: 90,
                     }}>
                     <option value="">馬名--</option>
                     {(selectedHorse && !horseRoster.includes(selectedHorse)
@@ -1283,12 +1308,12 @@ function AdminDetail({ surveyId }) {
                   </select>
                 </div>
                 {reason && (
-                  <div style={{ fontSize: 11, color: '#fbbf24', marginBottom: 2, paddingLeft: 2 }}>
+                  <div style={{ ...T.caption, color: C.warning, marginBottom: 2, paddingLeft: 2 }}>
                     ⚠ 重複回避不可: {reason}
                   </div>
                 )}
                 {suggestion && (
-                  <div style={{ fontSize: 11, color: '#67e8f9', marginBottom: 4, paddingLeft: 2 }}>
+                  <div style={{ ...T.caption, color: C.teal, marginBottom: 4, paddingLeft: 2 }}>
                     💡 修正案: {suggestion}
                   </div>
                 )}
@@ -1297,11 +1322,10 @@ function AdminDetail({ surveyId }) {
                     const on = attending.includes(m.name);
                     return (
                       <button key={m.name} onClick={() => toggleAsaUndo(day.date, m.name)} style={{
-                        padding: '3px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 12,
-                        background: on ? '#064e3b' : '#1e293b',
-                        color: on ? '#6ee7b7' : '#64748b',
-                        border: `1px solid ${on ? '#10b981' : '#334155'}`,
-                        fontWeight: on ? 700 : 400,
+                        padding: '3px 10px', borderRadius: R.md, cursor: 'pointer', ...T.badge,
+                        background: on ? C.surfaceCard : 'transparent',
+                        color: on ? C.ink : C.mutedSoft,
+                        border: `1px solid ${on ? C.hairline : C.hairlineSoft}`,
                       }}>
                         {on ? '✓' : '·'} {m.name}
                       </button>
@@ -1327,8 +1351,8 @@ function AdminDetail({ surveyId }) {
             if (entries.length === 0) return null;
             const conflicts = entries.filter(([, hm]) => Object.values(hm).some(c => c > 1));
             return (
-              <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #1e293b' }}>
-                <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8, color: conflicts.length > 0 ? '#f87171' : '#6ee7b7' }}>
+              <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${C.hairline}` }}>
+                <div style={{ ...T.badge, marginBottom: 8, color: conflicts.length > 0 ? C.warning : C.success }}>
                   {conflicts.length > 0 ? `⚠ 重複あり（${conflicts.length}名）` : '✓ 重複なし'}
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
@@ -1336,14 +1360,14 @@ function AdminDetail({ surveyId }) {
                     const hasConflict = Object.values(horseMap).some(c => c > 1);
                     return (
                       <div key={name} style={{
-                        fontSize: 11, padding: '3px 8px', borderRadius: 6,
-                        background: hasConflict ? '#3b1f1f' : '#0f1117',
-                        border: `1px solid ${hasConflict ? '#f87171' : '#1e293b'}`,
-                        color: hasConflict ? '#fca5a5' : '#64748b',
+                        ...T.caption, padding: '3px 8px', borderRadius: R.sm,
+                        background: hasConflict ? C.surfaceCreamStrong : C.surfaceSoft,
+                        border: `1px solid ${hasConflict ? C.warning : C.hairline}`,
+                        color: hasConflict ? C.warning : C.mutedSoft,
                       }}>
                         {name}:{' '}
                         {Object.entries(horseMap).map(([h, c]) => (
-                          <span key={h} style={{ color: c > 1 ? '#f87171' : '#94a3b8', fontWeight: c > 1 ? 700 : 400 }}>
+                          <span key={h} style={{ color: c > 1 ? C.warning : C.muted, fontWeight: c > 1 ? 700 : 400 }}>
                             {h}{c > 1 ? `×${c}` : ''}
                           </span>
                         )).reduce((acc, el, i) => i === 0 ? [el] : [...acc, '・', el], [])}
@@ -1358,8 +1382,8 @@ function AdminDetail({ surveyId }) {
 
         {survey.schedule.some(day => day.slots.includes('午前')) && (
           <div style={CARD}>
-            <div style={{ fontWeight: 700, marginBottom: 8 }}>📅 午前 振り分け</div>
-            <div style={{ fontSize: 12, color: '#64748b', marginBottom: 12 }}>
+            <div style={{ ...T.cardTitle, color: C.ink, marginBottom: 8 }}>📅 午前 振り分け</div>
+            <div style={{ ...T.caption, color: C.mutedSoft, marginBottom: 12 }}>
               午前参加者を1限・2限に振り分けます（上級生/下級生を均等配分、個人の回数差を最小化）
             </div>
             {survey.schedule.filter(day => day.slots.includes('午前')).map(day => {
@@ -1369,40 +1393,38 @@ function AdminDetail({ surveyId }) {
               const in1 = assign['1限'] || [];
               const in2 = assign['2限'] || [];
               return (
-                <div key={day.date} style={{ marginBottom: 16, paddingBottom: 16, borderBottom: '1px solid #0f1117' }}>
+                <div key={day.date} style={{ marginBottom: 16, paddingBottom: 16, borderBottom: `1px solid ${C.hairlineSoft}` }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8, flexWrap: 'wrap' }}>
                     <span style={{
-                      fontWeight: 700, fontSize: 13,
-                      color: day.dow === 6 ? '#f87171' : day.dow === 5 ? '#60a5fa' : '#e2e8f0',
+                      ...T.badge,
+                      color: day.dow === 6 ? C.error : day.dow === 5 ? C.teal : C.ink,
                     }}>
                       {survey.month}/{day.day}（{DOW_LABELS[day.dow]}）
                     </span>
-                    <span style={{ color: '#64748b', fontSize: 12 }}>
+                    <span style={{ ...T.caption, color: C.mutedSoft }}>
                       午前参加: {gozenAttendees.length > 0 ? gozenAttendees.map(m => m.name).join('、') : 'なし'}
                     </span>
                     <button
                       onClick={() => autoAssignGozen(day.date)}
                       disabled={gozenAttendees.length === 0}
                       style={{
-                        marginLeft: 'auto', padding: '4px 14px', fontSize: 12,
-                        background: '#1e3a5f', color: '#93c5fd',
-                        border: 'none', borderRadius: 6, cursor: gozenAttendees.length === 0 ? 'not-allowed' : 'pointer',
-                        fontWeight: 600, opacity: gozenAttendees.length === 0 ? 0.5 : 1,
+                        ...BTN_SECONDARY, marginLeft: 'auto', padding: '6px 14px', fontSize: 12,
+                        ...(gozenAttendees.length === 0 ? { opacity: 0.5, cursor: 'not-allowed' } : {}),
                       }}>🔀 自動振り分け</button>
                   </div>
                   {(in1.length > 0 || in2.length > 0) && (
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                       {['1限', '2限'].map(koma => (
                         <div key={koma}>
-                          <div style={{ color: '#fbbf24', fontWeight: 700, fontSize: 12, marginBottom: 4 }}>{koma}</div>
+                          <div style={{ ...T.badge, color: C.ink, marginBottom: 4 }}>{koma}</div>
                           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
                             {(koma === '1限' ? in1 : in2).map(name => (
                               <button key={name} onClick={() => toggleGozen(day.date, name, assign)}
                                 title={`クリックで${koma === '1限' ? '2限' : '1限'}に移動`}
                                 style={{
-                                  padding: '3px 9px', borderRadius: 6, fontSize: 11,
-                                  background: '#1e293b', color: '#e2e8f0',
-                                  border: '1px solid #334155', cursor: 'pointer',
+                                  padding: '3px 9px', borderRadius: R.sm, ...T.caption,
+                                  background: C.canvas, color: C.ink,
+                                  border: `1px solid ${C.hairline}`, cursor: 'pointer',
                                 }}>{name} ⇄</button>
                             ))}
                           </div>
@@ -1416,16 +1438,19 @@ function AdminDetail({ surveyId }) {
           </div>
         )}
 
-        <div style={{ ...CARD, textAlign: 'center' }}>
+        <div style={{
+          background: C.surfaceDark, borderRadius: R.lg, padding: S.xl,
+          textAlign: 'center', marginBottom: S.md,
+        }}>
           {pending.length > 0 && (
-            <div style={{ marginBottom: 12, fontSize: 13, color: '#94a3b8' }}>
+            <div style={{ ...T.body, marginBottom: 12, color: C.onDarkSoft }}>
               未提出: {pending.map(p => p.name).join('、')}
             </div>
           )}
           {pending.length === 0 && (
-            <div style={{ marginBottom: 12, fontSize: 13, color: '#6ee7b7' }}>🎉 全員提出済み</div>
+            <div style={{ ...T.body, marginBottom: 12, color: C.success }}>🎉 全員提出済み</div>
           )}
-          <button onClick={handleExport} style={BTN_SUCCESS}>
+          <button onClick={handleExport} style={BTN_PRIMARY}>
             📥 Excelファイル作成
           </button>
         </div>
@@ -1508,8 +1533,8 @@ function MemberView({ surveyId }) {
     setSelectedName(''); setSlots({}); setSavedSubmission(null); setMode('select');
   };
 
-  if (loading) return <div style={PAGE}><div style={{ padding: 40, textAlign: 'center' }}>読み込み中...</div></div>;
-  if (!survey) return <div style={PAGE}><div style={{ padding: 40, textAlign: 'center', color: '#f87171' }}>調査が見つかりません</div></div>;
+  if (loading) return <div style={PAGE}><div style={{ padding: 40, textAlign: 'center', ...T.body, color: C.muted }}>読み込み中...</div></div>;
+  if (!survey) return <div style={PAGE}><div style={{ padding: 40, textAlign: 'center', ...T.body, color: C.error }}>調査が見つかりません</div></div>;
 
   const remainDays = daysUntil(survey.deadline);
   const isExpired = survey.deadline && remainDays !== null && remainDays < 0;
@@ -1517,22 +1542,25 @@ function MemberView({ surveyId }) {
   if (mode === 'done') {
     return (
       <div style={PAGE}>
-        <div style={{ maxWidth: 500, margin: '60px auto', padding: 24, textAlign: 'center' }}>
-          <div style={{ fontSize: 60, marginBottom: 16 }}>✅</div>
-          <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 12 }}>送信完了しました</div>
-          <div style={{ color: '#94a3b8', marginBottom: 24 }}>
-            {selectedName} さんの{survey.year}年{survey.month}月分の希望を受け付けました
-          </div>
-          <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
-            <button onClick={() => setMode('confirm')} style={{
-              ...BTN_PRIMARY, background: '#1e293b', boxShadow: 'none',
-              border: '1px solid #334155', color: '#94a3b8',
-            }}>
-              📋 回答を確認する
-            </button>
-            <button onClick={resetToSelect} style={BTN_PRIMARY}>
-              別の人で入力
-            </button>
+        <div style={{ maxWidth: 500, margin: '60px auto', padding: 24 }}>
+          <div style={{ ...CARD, textAlign: 'center' }}>
+            <div style={{
+              width: 64, height: 64, borderRadius: '50%', background: C.surfaceCard,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              margin: '0 auto 16px', fontSize: 30, color: C.success,
+            }}>✓</div>
+            <div style={{ ...T.sectionTitle, color: C.ink, marginBottom: 12 }}>送信完了しました</div>
+            <div style={{ ...T.body, color: C.muted, marginBottom: 24 }}>
+              {selectedName} さんの{survey.year}年{survey.month}月分の希望を受け付けました
+            </div>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+              <button onClick={() => setMode('confirm')} style={BTN_SECONDARY}>
+                📋 回答を確認する
+              </button>
+              <button onClick={resetToSelect} style={BTN_PRIMARY}>
+                別の人で入力
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -1546,15 +1574,19 @@ function MemberView({ surveyId }) {
     });
     return (
       <div style={PAGE}>
+        <div style={{ background: C.surfaceDark }}>
+          <div style={{ maxWidth: 720, margin: '0 auto', padding: `${S.lg}px ${S.lg}px` }}>
+            <h1 style={{ ...T.sectionTitle, color: C.onDark, margin: 0 }}>
+              🐴 {survey.year}年{survey.month}月 練習参加調査
+            </h1>
+          </div>
+        </div>
         <div style={{ maxWidth: 720, margin: '0 auto', padding: 24 }}>
-          <h1 style={{ fontSize: 22, fontWeight: 800, marginBottom: 4 }}>
-            🐴 {survey.year}年{survey.month}月 練習参加調査
-          </h1>
           <div style={CARD}>
-            <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>
+            <div style={{ ...T.cardTitle, color: C.ink, marginBottom: 4 }}>
               {selectedName} さんの提出済み回答
             </div>
-            <div style={{ fontSize: 12, color: '#64748b', marginBottom: 16 }}>
+            <div style={{ ...T.caption, color: C.mutedSoft, marginBottom: 16 }}>
               提出日時: {fmt}
             </div>
             <div style={{ display: 'grid', gap: 8 }}>
@@ -1563,12 +1595,12 @@ function MemberView({ surveyId }) {
                 if (memberSlots.length === 0) return null;
                 return (
                   <div key={day.date} style={{
-                    background: '#0f1117', borderRadius: 10, padding: '10px 14px',
-                    borderLeft: `3px solid ${day.dow === 6 ? '#f87171' : day.dow === 5 ? '#60a5fa' : '#334155'}`,
+                    ...INSET, padding: '10px 14px',
+                    borderLeft: `3px solid ${day.dow === 6 ? C.error : day.dow === 5 ? C.teal : C.hairline}`,
                   }}>
                     <div style={{
-                      fontWeight: 700, marginBottom: 6, fontSize: 14,
-                      color: day.dow === 6 ? '#f87171' : day.dow === 5 ? '#60a5fa' : '#f8fafc',
+                      ...T.cardTitle, marginBottom: 6,
+                      color: day.dow === 6 ? C.error : day.dow === 5 ? C.teal : C.ink,
                     }}>
                       {survey.month}/{day.day}（{DOW_LABELS[day.dow]}）
                     </div>
@@ -1577,10 +1609,10 @@ function MemberView({ surveyId }) {
                         const on = !!savedSubmission.slots[`${day.date}__${s}`];
                         return (
                           <span key={s} style={{
-                            padding: '4px 12px', borderRadius: 6, fontSize: 13, fontWeight: 600,
-                            background: on ? '#064e3b' : '#1e293b',
-                            color: on ? '#6ee7b7' : '#475569',
-                            border: `1px solid ${on ? '#10b981' : '#1e293b'}`,
+                            padding: '4px 12px', borderRadius: R.md, ...T.badge,
+                            background: on ? C.surfaceCard : C.canvas,
+                            color: on ? C.ink : C.mutedSoft,
+                            border: `1px solid ${on ? C.hairline : C.hairlineSoft}`,
                           }}>
                             {on ? '○' : '×'} {s}
                           </span>
@@ -1595,10 +1627,7 @@ function MemberView({ surveyId }) {
               <button onClick={() => { setSlots(savedSubmission.slots); setMode('form'); }} style={BTN_PRIMARY}>
                 ✏️ 修正する
               </button>
-              <button onClick={resetToSelect} style={{
-                padding: '8px 20px', background: '#1e293b', border: '1px solid #334155',
-                borderRadius: 10, color: '#94a3b8', fontWeight: 700, fontSize: 14, cursor: 'pointer',
-              }}>
+              <button onClick={resetToSelect} style={BTN_SECONDARY}>
                 別の人で確認
               </button>
             </div>
@@ -1610,17 +1639,20 @@ function MemberView({ surveyId }) {
 
   return (
     <div style={PAGE}>
+      <div style={{ background: C.surfaceDark }}>
+        <div style={{ maxWidth: 720, margin: '0 auto', padding: `${S.lg}px ${S.lg}px` }}>
+          <h1 style={{ ...T.sectionTitle, color: C.onDark, margin: 0 }}>
+            🐴 {survey.year}年{survey.month}月 練習参加調査
+          </h1>
+        </div>
+      </div>
       <div style={{ maxWidth: 720, margin: '0 auto', padding: 24 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 800, marginBottom: 8 }}>
-          🐴 {survey.year}年{survey.month}月 練習参加調査
-        </h1>
-
         {survey.deadline && (
           <div style={{
-            marginBottom: 20, padding: '8px 14px', borderRadius: 8,
-            background: isExpired ? '#3b1f1f' : remainDays <= 3 ? '#451a03' : '#1e293b',
-            color: isExpired ? '#fca5a5' : remainDays <= 3 ? '#fdba74' : '#94a3b8',
-            fontSize: 13, fontWeight: 600,
+            marginBottom: 20, padding: '8px 14px', borderRadius: R.md,
+            background: isExpired ? C.surfaceSoft : C.surfaceCreamStrong,
+            color: isExpired ? C.error : remainDays <= 3 ? C.warning : C.muted,
+            ...T.badge,
           }}>
             {isExpired
               ? '⛔ 締切日を過ぎているため回答できません'
@@ -1631,13 +1663,13 @@ function MemberView({ surveyId }) {
         {isExpired ? null : (
           <>
             <div style={CARD}>
-              <div style={{ fontWeight: 700, marginBottom: 4 }}>① あなたの名前を選択</div>
-              <div style={{ fontSize: 12, color: '#64748b', marginBottom: 12 }}>
+              <div style={{ ...T.cardTitle, color: C.ink, marginBottom: 4 }}>① あなたの名前を選択</div>
+              <div style={{ ...T.caption, color: C.mutedSoft, marginBottom: 12 }}>
                 ✓ マークは前回の回答があります
               </div>
               {GRADE_ORDER.map(g => (
                 <div key={g} style={{ marginBottom: 12 }}>
-                  <div style={{ color: GRADE_COLOR[g], fontWeight: 700, marginBottom: 6, fontSize: 13 }}>
+                  <div style={{ ...T.badge, color: GRADE_COLOR[g], marginBottom: 6 }}>
                     {GRADE_LABEL[g]}
                   </div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
@@ -1646,21 +1678,21 @@ function MemberView({ surveyId }) {
                       const isSelected = selectedName === name;
                       return (
                         <button key={name} onClick={() => selectName(name)} style={{
-                          padding: '6px 14px', borderRadius: 8, cursor: 'pointer',
-                          border: `1px solid ${isSelected ? GRADE_COLOR[g] : '#334155'}`,
-                          background: isSelected ? GRADE_COLOR[g] + '33' : '#0f1117',
-                          color: isSelected ? GRADE_COLOR[g] : '#cbd5e1',
-                          fontWeight: isSelected ? 700 : 500, fontSize: 14,
+                          padding: '6px 14px', borderRadius: R.md, cursor: 'pointer',
+                          border: `1px solid ${isSelected ? C.primary : C.hairline}`,
+                          background: isSelected ? C.primary : C.canvas,
+                          color: isSelected ? C.onPrimary : C.ink,
+                          fontWeight: isSelected ? 600 : 500, fontSize: 14,
                           position: 'relative',
                         }}>
                           {name}
                           {hasSaved && (
                             <span style={{
                               position: 'absolute', top: -5, right: -5,
-                              fontSize: 9, background: '#10b981', color: '#fff',
+                              fontSize: 9, background: C.success, color: C.onPrimary,
                               borderRadius: '50%', width: 14, height: 14,
                               display: 'flex', alignItems: 'center', justifyContent: 'center',
-                              fontWeight: 900,
+                              fontWeight: 700,
                             }}>✓</span>
                           )}
                         </button>
@@ -1674,8 +1706,8 @@ function MemberView({ surveyId }) {
             {mode === 'form' && (
               <>
                 <div style={CARD}>
-                  <div style={{ fontWeight: 700, marginBottom: 8 }}>② 参加できる日程にチェック</div>
-                  <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 16 }}>
+                  <div style={{ ...T.cardTitle, color: C.ink, marginBottom: 8 }}>② 参加できる日程にチェック</div>
+                  <div style={{ ...T.caption, color: C.mutedSoft, marginBottom: 16 }}>
                     ✔チェックを入れた時限のみ「参加可能」として記録されます
                   </div>
                   <div style={{ display: 'grid', gap: 10 }}>
@@ -1685,21 +1717,21 @@ function MemberView({ surveyId }) {
                       const allOn = memberSlots.every(s => slots[`${day.date}__${s}`]);
                       return (
                         <div key={day.date} style={{
-                          background: '#0f1117', borderRadius: 10, padding: '12px 14px',
-                          borderLeft: `3px solid ${day.dow === 6 ? '#f87171' : day.dow === 5 ? '#60a5fa' : '#334155'}`,
+                          ...INSET, padding: '12px 14px',
+                          borderLeft: `3px solid ${day.dow === 6 ? C.error : day.dow === 5 ? C.teal : C.hairline}`,
                         }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8, flexWrap: 'wrap' }}>
                             <span style={{
-                              fontWeight: 700, fontSize: 16,
-                              color: day.dow === 6 ? '#f87171' : day.dow === 5 ? '#60a5fa' : '#f8fafc',
+                              ...T.cardTitle,
+                              color: day.dow === 6 ? C.error : day.dow === 5 ? C.teal : C.ink,
                             }}>
                               {survey.month}/{day.day} ({DOW_LABELS[day.dow]})
                             </span>
                             <button onClick={() => toggleDay(day, memberSlots, !allOn)} style={{
-                              marginLeft: 'auto', fontSize: 11, padding: '3px 10px',
-                              background: allOn ? '#3b1f1f' : '#064e3b',
-                              color: allOn ? '#fca5a5' : '#6ee7b7',
-                              border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600,
+                              marginLeft: 'auto', ...T.badge, padding: '4px 12px',
+                              background: allOn ? C.surfaceSoft : C.surfaceCard,
+                              color: allOn ? C.mutedSoft : C.ink,
+                              border: `1px solid ${C.hairline}`, borderRadius: R.md, cursor: 'pointer',
                             }}>
                               {allOn ? '全て外す' : 'この日全て'}
                             </button>
@@ -1711,15 +1743,14 @@ function MemberView({ surveyId }) {
                               return (
                                 <label key={s} style={{
                                   display: 'flex', alignItems: 'center', gap: 6,
-                                  padding: '6px 12px', borderRadius: 7, cursor: 'pointer',
-                                  background: on ? '#064e3b' : '#1e293b',
-                                  border: `1px solid ${on ? '#10b981' : '#334155'}`,
-                                  color: on ? '#6ee7b7' : '#94a3b8', fontSize: 13, fontWeight: 600,
+                                  padding: '6px 12px', borderRadius: R.md, cursor: 'pointer',
+                                  background: on ? C.surfaceCard : C.canvas,
+                                  border: `1px solid ${C.hairline}`,
+                                  color: C.ink, fontSize: 13, fontWeight: 600,
                                   userSelect: 'none',
                                 }}>
                                   <input type="checkbox" checked={on}
-                                    onChange={() => toggle(key)}
-                                    style={{ accentColor: '#10b981' }} />
+                                    onChange={() => toggle(key)} />
                                   {s}
                                 </label>
                               );
@@ -1732,10 +1763,10 @@ function MemberView({ surveyId }) {
                 </div>
 
                 <div style={{ ...CARD, textAlign: 'center' }}>
-                  <button onClick={submit} disabled={submitting} style={BTN_SUCCESS}>
+                  <button onClick={submit} disabled={submitting} style={BTN_PRIMARY}>
                     {submitting ? '送信中...' : `📨 ${selectedName} として送信`}
                   </button>
-                  <div style={{ fontSize: 11, color: '#64748b', marginTop: 8 }}>
+                  <div style={{ ...T.caption, color: C.mutedSoft, marginTop: 8 }}>
                     ※ 同じ名前で再送信すると上書きされます
                   </div>
                 </div>
