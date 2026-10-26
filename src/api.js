@@ -34,6 +34,8 @@ async function call(path, { method = 'GET', body, auth = false } = {}) {
 }
 
 export const api = {
+  getPinInfo: () => call('/api/auth'),
+
   login: (pin) => call('/api/auth', { method: 'POST', body: { pin } }),
 
   listSurveys: () => call('/api/survey', { auth: true }),
@@ -47,8 +49,8 @@ export const api = {
   createSurvey: (data) =>
     call('/api/survey', { method: 'POST', auth: true, body: { action: 'create', ...data } }),
 
-  respond: ({ id, name, grade, slots }) =>
-    call('/api/survey', { method: 'POST', body: { action: 'respond', id, name, grade, slots } }),
+  respond: ({ id, name, slots }) =>
+    call('/api/survey', { method: 'POST', body: { action: 'respond', id, name, slots } }),
 
   deleteSurvey: (id) =>
     call('/api/survey', { method: 'POST', auth: true, body: { action: 'delete', id } }),
@@ -74,8 +76,8 @@ export const api = {
   updateAsaUndoHorseEnabled: (id, names) =>
     call('/api/survey', { method: 'POST', auth: true, body: { action: 'updateAsaUndoHorseEnabled', id, names } }),
 
-  updateHorses: (id, horses) =>
-    call('/api/survey', { method: 'POST', auth: true, body: { action: 'updateHorses', id, horses } }),
+  updateHorse: (id, key, value) =>
+    call('/api/survey', { method: 'POST', auth: true, body: { action: 'updateHorse', id, key, value } }),
 
   updateAsaUndo: (id, date, names) =>
     call('/api/survey', { method: 'POST', auth: true, body: { action: 'updateAsaUndo', id, date, names } }),
@@ -88,6 +90,9 @@ export const api = {
 
   updateAsaUndoHorse: (id, date, horse) =>
     call('/api/survey', { method: 'POST', auth: true, body: { action: 'updateAsaUndoHorse', id, date, horse } }),
+
+  setAsaUndoHorses: (id, assignments) =>
+    call('/api/survey', { method: 'POST', auth: true, body: { action: 'setAsaUndoHorses', id, assignments } }),
 
   changePin: (newPin) =>
     call('/api/survey', { method: 'POST', auth: true, body: { action: 'changePin', newPin } }),

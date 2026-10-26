@@ -19,12 +19,15 @@
 2. **Upstash** → **KV (Redis)** を選択 → リージョン Tokyo → Create
 3. 自動的に `KV_REST_API_URL` / `KV_REST_API_TOKEN` 等が環境変数に登録される
 
-### 4. PIN を設定
+### 4. PIN を設定（必須）
 プロジェクト → Settings → Environment Variables に追加:
 ```
-ADMIN_PIN   = （4-8桁の数字、例: 0521）
-ADMIN_SECRET = （ランダムな文字列、例: practice2026xyz）
+ADMIN_PIN    = （4〜8桁の数字）
+ADMIN_SECRET = （推測されにくい長いランダム文字列）
 ```
+どちらも**コード側に既定値はない**。`ADMIN_SECRET` が未設定だとログインできない（`ADMIN_PIN` は管理画面で PIN を変更済みなら不要）。
+
+PIN の総当たり対策として、失敗が **同じ IP から15分で5回** または **全体で1時間に30回** に達するとログインを一時停止する（Redis の `practice:authfail:*`）。
 
 ### 5. Deploy
 Deployments タブ → Redeploy
@@ -95,6 +98,24 @@ npm run dev
 
 保存先は Redis の `practice:asaUndoHorses`（共通）と各調査の `asaUndoHorseEnabled`（月ごとの上書き）。
 未設定の場合は `src/App.jsx` の `ASA_UNDO_HORSES`（既定値: イト・ツムギ・シュウ・スモモ）が使われる。
+
+## データの保存形式
+
+調査本体 `practice:survey:{id}` には年月・日程・名簿・締切だけを置き、回答や管理者の記録は
+フィールド単位の Hash に分けて保存する（同時送信で互いを上書きしないため）。
+
+| キー | フィールド → 値 |
+|---|---|
+| `practice:survey:{id}:responses` | 名前 → `{ name, grade, slots, submittedAt }` |
+| `practice:survey:{id}:horses` | `日付__時限` → 馬名 |
+| `practice:survey:{id}:asaUndo` | 日付 → 参加者名の配列 |
+| `practice:survey:{id}:asaUndoHorse` | 日付 → 馬名 |
+| `practice:survey:{id}:gozenAssign` | 日付 → `{ '1限': [...], '2限': [...] }` |
+
+旧形式（本体に埋め込み）の調査は、管理画面で開いたときに自動で Hash に移行される。
+
+部員の回答はサーバ側でも検証する: 締切日（JST 23:59:59）を過ぎた送信は拒否、学年は名簿から決定、
+調査に存在しない時限や朝運動のチェックは捨てる。
 
 ## メンバー
 `src/schedule.js` の `INITIAL_GROUPS`（`shift-app` と同一）。

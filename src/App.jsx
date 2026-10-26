@@ -195,6 +195,14 @@ function assignAsaUndoHorses(schedule, asaUndo, groups, horseList = ASA_UNDO_HOR
   return { assignments: result, reasons, suggestions };
 }
 
+function loginErrorMessage(e) {
+  if (e.status === 401) return 'PINが違います';
+  if (e.message === 'too_many_attempts') return '失敗が続いたため一時ロック中です。15分ほど待ってください';
+  if (e.message === 'pin_not_configured') return 'PIN が未設定です（環境変数 ADMIN_PIN）';
+  if (e.message === 'secret_not_configured') return '署名鍵が未設定です（環境変数 ADMIN_SECRET）';
+  return e.message || '失敗';
+}
+
 // ════════════════════════════════════════════════════════════════
 // PINロック画面
 // ════════════════════════════════════════════════════════════════
@@ -203,6 +211,14 @@ function PinLock({ onUnlock }) {
   const [err, setErr] = useState('');
   const [loading, setLoading] = useState(false);
   const [shake, setShake] = useState(false);
+  // サーバに設定されている PIN の桁数。分かれば、その桁数に達した時点で自動送信する
+  const [pinLength, setPinLength] = useState(null);
+
+  useEffect(() => {
+    api.getPinInfo()
+      .then(r => { if (Number.isInteger(r?.pinLength)) setPinLength(r.pinLength); })
+      .catch(() => {});
+  }, []);
 
   const submit = useCallback(async (p) => {
     if (!p || loading) return;
@@ -212,7 +228,7 @@ function PinLock({ onUnlock }) {
       tokenStore.set(token);
       onUnlock();
     } catch (e) {
-      setErr(e.status === 401 ? 'PINが違います' : (e.message || '失敗'));
+      setErr(loginErrorMessage(e));
       setPin('');
       setShake(true);
       setTimeout(() => setShake(false), 500);
@@ -245,9 +261,9 @@ function PinLock({ onUnlock }) {
     return () => window.removeEventListener('keydown', handler);
   }, [press, back, submit]);
 
-  // 4桁以上入力されたら自動送信（PINが4桁の場合に即開く）
+  // PIN の桁数に達したら自動送信（桁数が取れなければ OK / Enter で送信）
   useEffect(() => {
-    if (pin.length >= 4 && !loading) {
+    if (pinLength && pin.length === pinLength && !loading) {
       submit(pin);
     }
   }, [pin]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -272,7 +288,7 @@ function PinLock({ onUnlock }) {
           transition: 'transform 0.1s',
           transform: shake ? 'translateX(8px)' : 'none',
         }}>
-          {Array.from({ length: Math.max(4, pin.length) }).map((_, i) => (
+          {Array.from({ length: Math.max(pinLength || 4, pin.length) }).map((_, i) => (
             <div key={i} style={{
               width: 14, height: 14, borderRadius: '50%',
               border: `2px solid ${i < pin.length ? dotFilled : C.hairline}`,
@@ -942,15 +958,25 @@ function AdminDetail({ surveyId }) {
   const [asaHorses, setAsaHorses] = useState(() => ASA_UNDO_HORSES.map(n => ({ name: n, active: true })));
   const [enabledHorses, setEnabledHorses] = useState(null);
   const [horsesLoaded, setHorsesLoaded] = useState('loading'); // 'loading' | 'ok' | 'failed'
+  const [saveError, setSaveError] = useState('');
+  // 保存中の件数と、保存を始めた回数。読み込み中に保存が走ったら、
+  // 古いサーバ値で画面の編集内容を巻き戻さないようにするために使う
+  const pendingSaves = useRef(0);
+  const saveSeq = useRef(0);
 
   const load = useCallback(async () => {
+    const seqAtStart = saveSeq.current;
+    const editedMeanwhile = () => pendingSaves.current > 0 || saveSeq.current !== seqAtStart;
     try {
       const { survey } = await api.getSurveyFull(surveyId);
+      // 回答（responses）は常に最新にする。管理者が編集する記録は、保存と重なったら反映しない
       setSurvey(survey);
-      setHorses(survey.horses || {});
-      setAsaUndo(survey.asaUndo || {});
-      setAsaUndoHorse(survey.asaUndoHorse || {});
-      setGozenAssign(survey.gozenAssign || {});
+      if (!editedMeanwhile()) {
+        setHorses(survey.horses || {});
+        setAsaUndo(survey.asaUndo || {});
+        setAsaUndoHorse(survey.asaUndoHorse || {});
+        setGozenAssign(survey.gozenAssign || {});
+      }
       api.getHorseNames().then(r => setHorseNameSuggestions(r.names || [])).catch(() => {});
       api.getAsaUndoHorses()
         .then(r => {
@@ -958,7 +984,9 @@ function AdminDetail({ surveyId }) {
             ? r.horses
             : ASA_UNDO_HORSES.map(n => ({ name: n, active: true }));
           setAsaHorses(roster);
-          setEnabledHorses(survey.asaUndoHorseEnabled ?? roster.filter(h => h.active).map(h => h.name));
+          if (!editedMeanwhile()) {
+            setEnabledHorses(survey.asaUndoHorseEnabled ?? roster.filter(h => h.active).map(h => h.name));
+          }
           setHorsesLoaded('ok');
         })
         .catch((err) => { console.error('馬リスト取得失敗:', err.message); setHorsesLoaded('failed'); });
@@ -970,10 +998,28 @@ function AdminDetail({ surveyId }) {
 
   useEffect(() => { load(); }, [load, refreshAt]);
 
-  // #5: 60秒ポーリング
+  // #5: 60秒ポーリング（保存中はスキップ）
   useEffect(() => {
-    const t = setInterval(() => setRefreshAt(Date.now()), 60000);
+    const t = setInterval(() => {
+      if (pendingSaves.current === 0) setRefreshAt(Date.now());
+    }, 60000);
     return () => clearInterval(t);
+  }, []);
+
+  // 保存を実行し、失敗したら画面上部に表示する。成功なら true
+  const persist = useCallback(async (label, fn) => {
+    pendingSaves.current++;
+    saveSeq.current++;
+    try {
+      await fn();
+      return true;
+    } catch (e) {
+      console.error(`${label}保存失敗:`, e.message);
+      setSaveError(`${label}の保存に失敗しました（${e.message}）。「🔄 更新」でサーバの状態を確認してください`);
+      return false;
+    } finally {
+      pendingSaves.current--;
+    }
   }, []);
 
   const memberLink = useMemo(() => {
@@ -993,10 +1039,10 @@ function AdminDetail({ surveyId }) {
   };
 
   const saveHorse = async (key, value) => {
-    const next = { ...horses, [key]: value };
-    setHorses(next);
-    try { await api.updateHorses(surveyId, next); }
-    catch (e) { console.error('馬名保存失敗:', e.message); }
+    const name = value.trim();
+    if ((horses[key] || '') === name) return;
+    setHorses(prev => ({ ...prev, [key]: name }));
+    await persist('馬名', () => api.updateHorse(surveyId, key, name));
   };
 
   const toggleAsaUndo = async (date, name) => {
@@ -1005,8 +1051,7 @@ function AdminDetail({ surveyId }) {
       ? current.filter(n => n !== name)
       : [...current, name];
     setAsaUndo(prev => ({ ...prev, [date]: next }));
-    try { await api.updateAsaUndo(surveyId, date, next); }
-    catch (e) { console.error('朝運動保存失敗:', e.message); }
+    await persist('朝運動記録', () => api.updateAsaUndo(surveyId, date, next));
   };
 
   const toggleGozen = async (date, name, assign) => {
@@ -1016,8 +1061,7 @@ function AdminDetail({ surveyId }) {
       ? { '1限': in1.filter(n => n !== name), '2限': [...in2, name] }
       : { '1限': [...in1, name], '2限': in2.filter(n => n !== name) };
     setGozenAssign(prev => ({ ...prev, [date]: next }));
-    try { await api.updateGozenAssign(surveyId, date, next); }
-    catch (e) { console.error('振り分け保存失敗:', e.message); }
+    await persist('午前振り分け', () => api.updateGozenAssign(surveyId, date, next));
   };
 
   if (loading) return <div style={PAGE}><div style={{ padding: 40, textAlign: 'center', ...T.body, color: C.muted }}>読み込み中...</div></div>;
@@ -1037,8 +1081,8 @@ function AdminDetail({ surveyId }) {
     const prev = usableHorses;
     const next = prev.includes(name) ? prev.filter(n => n !== name) : [...prev, name];
     setEnabledHorses(next);
-    try { await api.updateAsaUndoHorseEnabled(surveyId, next); }
-    catch (e) { setEnabledHorses(prev); alert('保存失敗: ' + e.message); }
+    const ok = await persist('この月に使う馬', () => api.updateAsaUndoHorseEnabled(surveyId, next));
+    if (!ok) setEnabledHorses(prev);
   };
 
   const autoAssignAsaUndoHorses = async () => {
@@ -1048,18 +1092,15 @@ function AdminDetail({ surveyId }) {
     setAsaUndoHorse(newAssign);
     setAssignReasons(reasons);
     setAssignSuggestions(suggestions);
-    for (const [date, horse] of Object.entries(newAssign)) {
-      try { await api.updateAsaUndoHorse(surveyId, date, horse); }
-      catch (e) { console.error('馬割り当て保存失敗:', e.message); }
-    }
+    // 1回の要求でまとめて置き換える（参加者がいなくなった日の古い馬名も消える）
+    await persist('朝運動の馬の自動配置', () => api.setAsaUndoHorses(surveyId, newAssign));
   };
 
   const saveAsaUndoHorse = async (date, horse) => {
     setAsaUndoHorse(prev => ({ ...prev, [date]: horse }));
     setAssignReasons(prev => { const next = { ...prev }; delete next[date]; return next; });
     setAssignSuggestions(prev => { const next = { ...prev }; delete next[date]; return next; });
-    try { await api.updateAsaUndoHorse(surveyId, date, horse); }
-    catch (e) { console.error('馬割り当て保存失敗:', e.message); }
+    await persist('朝運動の馬', () => api.updateAsaUndoHorse(surveyId, date, horse));
   };
 
   const autoAssignGozen = async (date) => {
@@ -1067,11 +1108,28 @@ function AdminDetail({ surveyId }) {
     const attendees = allMembers.filter(m => responses[m.name]?.slots?.[key]);
     const assign = assignGozen(date, attendees, gozenAssign);
     setGozenAssign(prev => ({ ...prev, [date]: assign }));
-    try { await api.updateGozenAssign(surveyId, date, assign); }
-    catch (e) { console.error('振り分け保存失敗:', e.message); }
+    await persist('午前振り分け', () => api.updateGozenAssign(surveyId, date, assign));
   };
 
+  // 午前の振り分けが、いまの回答と食い違っていないか
+  const gozenStatus = (date) => {
+    const attendees = allMembers
+      .filter(m => responses[m.name]?.slots?.[`${date}__午前`])
+      .map(m => m.name);
+    const assign = gozenAssign[date] || {};
+    const assigned = [...(assign['1限'] || []), ...(assign['2限'] || [])];
+    const added = attendees.filter(n => !assigned.includes(n));
+    const removed = assigned.filter(n => !attendees.includes(n));
+    return { added, removed, stale: assigned.length > 0 && (added.length > 0 || removed.length > 0) };
+  };
+  const staleGozenDays = survey.schedule
+    .filter(day => day.slots.includes('午前') && gozenStatus(day.date).stale);
+
   const handleExport = () => {
+    if (staleGozenDays.length > 0 && !confirm(
+      `午前の振り分け後に回答が変わった日があります（${staleGozenDays.map(d => `${survey.month}/${d.day}`).join('、')}）。\n` +
+      'Excel にはその日の振り分け時点の参加者が出力されます。このまま出力しますか？'
+    )) return;
     exportPracticeXlsx({
       year: survey.year, month: survey.month,
       schedule: survey.schedule, responses, groups: survey.groups, horses,
@@ -1106,6 +1164,17 @@ function AdminDetail({ surveyId }) {
         </div>
       </div>
       <div style={{ maxWidth: 1000, margin: '0 auto', padding: 24 }}>
+        {saveError && (
+          <div role="alert" style={{
+            ...CARD, borderColor: C.error, color: C.error, ...T.body,
+            display: 'flex', alignItems: 'flex-start', gap: 10,
+          }}>
+            <span style={{ flex: 1 }}>⚠ {saveError}</span>
+            <button onClick={() => setSaveError('')} aria-label="閉じる" style={{
+              background: 'transparent', border: 'none', color: C.error, cursor: 'pointer', fontSize: 16,
+            }}>✕</button>
+          </div>
+        )}
         <div style={CARD}>
           <div style={{ ...T.cardTitle, color: C.ink, marginBottom: 10 }}>📩 部員配布リンク</div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -1412,6 +1481,17 @@ function AdminDetail({ surveyId }) {
                         ...(gozenAttendees.length === 0 ? { opacity: 0.5, cursor: 'not-allowed' } : {}),
                       }}>🔀 自動振り分け</button>
                   </div>
+                  {gozenStatus(day.date).stale && (() => {
+                    const { added, removed } = gozenStatus(day.date);
+                    return (
+                      <div style={{ ...T.caption, color: C.warning, marginBottom: 8 }}>
+                        ⚠ 振り分け後に回答が変わりました
+                        {added.length > 0 && `（未振り分け: ${added.join('・')}）`}
+                        {removed.length > 0 && `（参加取り消し: ${removed.join('・')}）`}
+                        。もう一度「🔀 自動振り分け」してください
+                      </div>
+                    );
+                  })()}
                   {(in1.length > 0 || in2.length > 0) && (
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                       {['1限', '2限'].map(koma => (
@@ -1513,19 +1593,18 @@ function MemberView({ surveyId }) {
     if (!selectedName) { alert('名前を選んでください'); return; }
     setSubmitting(true);
     try {
-      await api.respond({
-        id: surveyId,
-        name: selectedName,
-        grade: gradeOf(selectedName, survey.groups) ?? 'first',
-        slots,
-      });
+      await api.respond({ id: surveyId, name: selectedName, slots });
       const now = new Date().toISOString();
       const submission = { slots, submittedAt: now };
       localStorage.setItem(lsKey(selectedName), JSON.stringify(submission));
       setSavedSubmission(submission);
       setMode('done');
     } catch (e) {
-      alert('送信失敗: ' + e.message);
+      const msg = {
+        deadline_passed: '締切日を過ぎているため送信できません',
+        invalid_name: '名簿にない名前です。管理者に連絡してください',
+      }[e.message] || e.message;
+      alert('送信失敗: ' + msg);
     } finally { setSubmitting(false); }
   };
 
