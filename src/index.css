@@ -1,20 +1,24 @@
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; }
 body {
-  font-family: Inter, 'Noto Sans JP', -apple-system, BlinkMacSystemFont, sans-serif;
-  background: #f5f0e8;
-  color: #3d3d3a;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', Inter, 'Hiragino Sans', 'Noto Sans JP', sans-serif;
+  background: #f5f5f7;
+  color: #1d1d1f;
+  letter-spacing: -0.2px;
   -webkit-font-smoothing: antialiased;
 }
 button, input, select, textarea { font-family: inherit; }
-input[type="checkbox"], input[type="radio"], select { accent-color: #cc785c; }
+input[type="checkbox"], input[type="radio"], select { accent-color: #0066cc; }
 input:focus, select:focus, textarea:focus {
-  border-color: #cc785c;
-  box-shadow: 0 0 0 3px rgba(204, 120, 92, 0.15);
+  border-color: #0071e3;
+  box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.2);
   outline: none;
 }
 button:focus-visible, a:focus-visible {
-  outline: 2px solid #cc785c;
+  outline: 2px solid #0071e3;
   outline-offset: 2px;
 }
-::selection { background: rgba(204, 120, 92, 0.2); }
+/* 押したときに少し縮む（全ボタン共通の反応） */
+button { transition: transform 0.1s ease; }
+button:not(:disabled):active { transform: scale(0.95); }
+::selection { background: rgba(0, 102, 204, 0.18); }

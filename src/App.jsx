@@ -27,18 +27,19 @@ const CARD = { background: C.canvas, border: `1px solid ${C.hairline}`, borderRa
 const INSET = { background: C.surfaceSoft, borderRadius: R.md };
 const INPUT = {
   background: C.canvas, border: `1px solid ${C.hairline}`, borderRadius: R.md,
-  color: C.ink, padding: '10px 14px', fontSize: 14, fontFamily: FONT.sans, outline: 'none',
+  color: C.ink, padding: '10px 14px', fontSize: 15, fontFamily: FONT.sans, outline: 'none',
 };
+// 主要操作は青いピル、2番目の操作は青い枠線のピル（index.css で押下時に縮む）
 const BTN_PRIMARY = {
-  padding: '11px 20px', background: C.primary, border: 'none', borderRadius: R.md,
-  color: C.onPrimary, fontWeight: 500, fontSize: 14, fontFamily: FONT.sans, cursor: 'pointer',
+  ...T.button, padding: '11px 22px', background: C.primary, border: `1px solid ${C.primary}`,
+  borderRadius: R.pill, color: C.onPrimary, cursor: 'pointer',
 };
 const BTN_SECONDARY = {
-  padding: '10px 18px', background: C.canvas, border: `1px solid ${C.hairline}`, borderRadius: R.md,
-  color: C.ink, fontWeight: 500, fontSize: 14, fontFamily: FONT.sans, cursor: 'pointer',
+  ...T.button, padding: '10px 20px', background: 'transparent', border: `1px solid ${C.primary}`,
+  borderRadius: R.pill, color: C.primary, cursor: 'pointer',
 };
 const BTN_DANGER = {
-  padding: '4px 12px', background: 'transparent', border: `1px solid ${C.hairline}`, borderRadius: R.sm,
+  padding: '5px 14px', background: 'transparent', border: `1px solid ${C.hairline}`, borderRadius: R.pill,
   color: C.error, fontSize: 12, fontFamily: FONT.sans, cursor: 'pointer',
 };
 
@@ -583,10 +584,11 @@ function AdminHome() {
 
   const logout = () => { tokenStore.clear(); window.location.reload(); };
 
+  // セグメントコントロール: グレーのピルの中で、選択中だけ白いピルになる
   const tabStyle = (key) => ({
-    padding: '8px 14px', borderRadius: R.md, border: 'none', cursor: 'pointer',
-    fontSize: 13, fontWeight: 500, fontFamily: FONT.sans,
-    background: tab === key ? C.surfaceCard : 'transparent',
+    flex: 1, padding: '8px 14px', borderRadius: R.pill, border: 'none', cursor: 'pointer',
+    ...T.caption, fontWeight: tab === key ? 600 : 400,
+    background: tab === key ? C.canvas : 'transparent',
     color: tab === key ? C.ink : C.muted,
   });
 
@@ -601,12 +603,15 @@ function AdminHome() {
           <button onClick={logout} style={{
             marginLeft: 'auto', padding: '6px 14px', fontSize: 12, fontFamily: FONT.sans,
             background: C.surfaceDarkElevated, color: C.onDark, border: 'none',
-            borderRadius: R.md, cursor: 'pointer',
+            borderRadius: R.sm, cursor: 'pointer',
           }}>ログアウト</button>
         </div>
       </div>
       <div style={{ maxWidth: 720, margin: '0 auto', padding: 24 }}>
-        <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+        <div style={{
+          display: 'flex', gap: 2, padding: 3, marginBottom: 20,
+          background: C.surfaceCard, borderRadius: R.pill,
+        }}>
           <button style={tabStyle('survey')} onClick={() => setTab('survey')}>📅 調査</button>
           <button style={tabStyle('staff')} onClick={() => setTab('staff')}>👥 スタッフ</button>
           <button style={tabStyle('settings')} onClick={() => setTab('settings')}>⚙️ 設定</button>
@@ -879,7 +884,7 @@ function AdminHome() {
                 <button onClick={promoteAll} disabled={saving} style={{
                   marginLeft: 'auto', padding: '6px 16px', fontSize: 13, fontWeight: 600,
                   fontFamily: FONT.sans,
-                  background: C.surfaceCreamStrong,
+                  background: C.surfaceStrong,
                   color: C.warning, border: 'none', borderRadius: R.md, cursor: 'pointer',
                   opacity: saving ? 0.5 : 1,
                 }}>🎓 学年を一斉繰り上げ</button>
@@ -1430,7 +1435,7 @@ function AdminDetail({ surveyId }) {
                     return (
                       <div key={name} style={{
                         ...T.caption, padding: '3px 8px', borderRadius: R.sm,
-                        background: hasConflict ? C.surfaceCreamStrong : C.surfaceSoft,
+                        background: hasConflict ? C.surfaceStrong : C.surfaceSoft,
                         border: `1px solid ${hasConflict ? C.warning : C.hairline}`,
                         color: hasConflict ? C.warning : C.mutedSoft,
                       }}>
@@ -1519,7 +1524,7 @@ function AdminDetail({ surveyId }) {
         )}
 
         <div style={{
-          background: C.surfaceDark, borderRadius: R.lg, padding: S.xl,
+          background: C.surfaceTile, borderRadius: R.lg, padding: S.xxl,
           textAlign: 'center', marginBottom: S.md,
         }}>
           {pending.length > 0 && (
@@ -1729,7 +1734,7 @@ function MemberView({ surveyId }) {
         {survey.deadline && (
           <div style={{
             marginBottom: 20, padding: '8px 14px', borderRadius: R.md,
-            background: isExpired ? C.surfaceSoft : C.surfaceCreamStrong,
+            background: isExpired ? C.surfaceSoft : C.surfaceStrong,
             color: isExpired ? C.error : remainDays <= 3 ? C.warning : C.muted,
             ...T.badge,
           }}>

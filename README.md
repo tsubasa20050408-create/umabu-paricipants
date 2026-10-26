@@ -53,12 +53,17 @@ Deployments タブ → Redeploy
 配色・タイポグラフィ・角丸・余白は `src/theme.js` に集約（`C` 色 / `FONT` / `R` 角丸 / `S` 余白 / `T` タイポ）。
 **コンポーネント側で hex を直接書かない**こと。
 
-- クリームの地（`#f5f0e8`）にカード（`#faf9f5` + 1px 罫線）。影とグラデーションは使わない
-- アクセントはコーラル `#cc785c` のみ。主要ボタン（作成・送信・Excel出力）に限定して使う
-- 見出しはセリフ（Cormorant Garamond + Noto Serif JP）、本文は Inter + Noto Sans JP。
-  フォントは `index.html` の Google Fonts から読み込む
-- ダーク面（`#181715`）は**ヘッダー帯と Excel 出力の CTA 帯の2箇所だけ**
-- 学年色: 3年=コーラル / 2年=アンバー / 1年=ティール（`src/schedule.js` の `GRADE_COLOR`）
+出典は [VoltAgent/awesome-design-md](https://github.com/VoltAgent/awesome-design-md) の Apple の DESIGN.md。
+ロゴや社名は使わず、配色・文字・角丸・余白の考え方だけを取り入れている。
+
+- 薄いグレーの地（`#f5f5f7`）に白いカード（角丸18px + 1px 罫線）。影とグラデーションは使わない
+- 操作色は青 `#0066cc` の1色だけ。主要ボタンは青いピル、2番目の操作は青い枠線のピル。
+  押すと少し縮む（`index.css` の `button:active`）
+- 文字は Apple 端末では SF Pro、それ以外は Inter + Noto Sans JP。見出しは太さ 600 で字間を詰める
+  （500 は使わない）。フォントは `index.html` の Google Fonts から読み込む
+- 管理画面のタブはセグメントコントロール（グレーのピルの中で選択中だけ白）
+- 黒い面は**ヘッダー帯（`#000`）と Excel 出力の CTA 帯（`#1d1d1f`）の2箇所だけ**
+- 学年色はデータの色分け専用: 3年=オレンジ / 2年=グリーン / 1年=パープル（`src/schedule.js` の `GRADE_COLOR`）
 
 ## ローカル開発
 ```
